@@ -69,11 +69,16 @@
         --grain-opacity: .10;
       }
       html, body { margin: 0; background: var(--bg); }
+      body { position: relative; min-height: 100vh; }
       /* Paper texture over everything, per-theme blend — gives the flat
-         surfaces a printed feel in both light and dark mode. */
+         surfaces a printed feel in both light and dark mode. Absolutely
+         positioned so it spans the FULL page height (a fixed overlay only
+         covers the viewport); tiled at a fixed scale so tall pages don't
+         stretch the grain. */
       #grain {
-        position: fixed; inset: 0; z-index: 9000; pointer-events: none;
-        background: url(/brand/paper-texture.jpg) center / cover no-repeat;
+        position: absolute; inset: 0; z-index: 9000; pointer-events: none;
+        background: url(/brand/paper-texture.jpg) repeat;
+        background-size: 1400px auto;
         mix-blend-mode: var(--grain-blend); opacity: var(--grain-opacity);
       }
     </style>
