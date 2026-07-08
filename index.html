@@ -7,8 +7,8 @@
     <meta name="description" content="A private podcast & vodcast for the family — listen and watch, family only." />
     <meta name="theme-color" content="#17181A" />
 
-    <!-- Icons -->
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Icons (2026 brand: textured olive tile, Chinese Lantern SS) -->
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
     <!-- Link preview / share card (Open Graph + Twitter).
@@ -48,8 +48,11 @@
         --text:     #F7F7F7;             /* Lynx White */
         --gray:     #8b8f8e;             /* muted neutral text */
         --grayDim:  #c4c8c6;             /* secondary neutral text */
-        /* recolor the cream logo art to Lynx White for the charcoal background */
+        /* recolor the dark-ink logo art to Lynx White for the charcoal background */
         --logo-filter: brightness(0) saturate(100%) invert(97%);
+        /* paper-grain overlay: soft-light lifts the charcoal subtly */
+        --grain-blend: soft-light;
+        --grain-opacity: .5;
       }
       :root[data-theme="light"] {
         --bg:       #E5EBEA;             /* Dream Catcher */
@@ -59,10 +62,20 @@
         --text:     #172713;             /* Deep Slate Olive */
         --gray:     #5f6f5c;             /* muted Sensaimidori */
         --grayDim:  #374231;             /* Sensaimidori — secondary text */
-        /* recolor the cream logo art to deep olive for the light background */
+        /* recolor the dark-ink logo art to deep olive for the light background */
         --logo-filter: brightness(0) saturate(100%) invert(11%) sepia(24%) saturate(1400%) hue-rotate(75deg) brightness(92%) contrast(92%);
+        /* paper-grain overlay: multiply reads as fibers on the light background */
+        --grain-blend: multiply;
+        --grain-opacity: .10;
       }
       html, body { margin: 0; background: var(--bg); }
+      /* Paper texture over everything, per-theme blend — gives the flat
+         surfaces a printed feel in both light and dark mode. */
+      #grain {
+        position: fixed; inset: 0; z-index: 9000; pointer-events: none;
+        background: url(/brand/paper-texture.jpg) center / cover no-repeat;
+        mix-blend-mode: var(--grain-blend); opacity: var(--grain-opacity);
+      }
     </style>
     <script>
       /* Apply the saved theme before first paint to avoid a flash. */
@@ -79,6 +92,7 @@
   </head>
   <body>
     <div id="root"></div>
+    <div id="grain" aria-hidden="true"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
