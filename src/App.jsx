@@ -155,29 +155,28 @@ function prettyDate(d) {
   if (isNaN(date)) return d;
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
-// Relative recency ("3 days ago") so listeners can tell at a glance how fresh
-// an episode is. Future or unparseable dates return "".
+// Relative recency for fresh episodes ("3 days ago"); returns "" once an
+// episode is over a month old (or the date is future/unparseable) so the
+// card falls back to the plain date.
 function timeAgo(d) {
   if (!d) return "";
   const date = new Date(d + (d.length === 10 ? "T00:00:00" : ""));
   if (isNaN(date)) return "";
   const days = Math.floor((Date.now() - date.getTime()) / 86400000);
-  if (days < 0) return "";
+  if (days < 0 || days > 31) return "";
   if (days === 0) return "today";
   if (days === 1) return "yesterday";
   if (days < 14) return `${days} days ago`;
-  if (days < 60) return `${Math.floor(days / 7)} weeks ago`;
-  if (days < 365) return `${Math.floor(days / 30)} months ago`;
-  const y = Math.floor(days / 365);
-  return y === 1 ? "1 year ago" : `${y} years ago`;
+  return `${Math.floor(days / 7)} weeks ago`;
 }
-// "Published <date> · <recency>" line used on the listener episode cards.
+// Published line on listener episode cards: recency alone while it's fresh
+// ("Published 3 days ago"), plain date once it's over a month old.
 const PublishedDate = ({ date, style={} }) => {
   if (!date) return null;
   const ago = timeAgo(date);
   return (
     <span style={{fontSize:12,color:T.gray,fontWeight:600,...style}}>
-      Published {prettyDate(date)}{ago ? <span style={{opacity:.75}}> · {ago}</span> : null}
+      Published {ago || prettyDate(date)}
     </span>
   );
 };
