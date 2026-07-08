@@ -87,6 +87,7 @@ const Icons = {
   check:   "M20 6L9 17l-5-5",
   x:       ["M18 6L6 18","M6 6l12 12"],
   arrow:   ["M5 12h14","M12 5l7 7-7 7"],
+  arrowLeft:["M19 12H5","M12 19l-7-7 7-7"],
   dot:     "M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0",
   lock:    ["M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z","M7 11V7a5 5 0 0 1 10 0v4"],
   logout:  ["M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4","M16 17l5-5-5-5","M21 12H9"],
@@ -177,7 +178,33 @@ async function sendEpisodeEmails(subscribers, episode, credentials) {
 }
 
 // ─── Storage ───────────────────────────────────────────────────────────────────
-const store = {
+// Shared backend: a Netlify Function (netlify/functions/store.mjs) backed by
+// Netlify Blobs, so episodes, subscribers, and settings are the same for every
+// family member on every device. When the API isn't reachable (e.g. plain
+// `vite` dev without Netlify), falls back to the per-browser localStorage shim
+// in src/storage.js so the app still works as a single-device demo.
+const API_URL = "/api/store";
+let apiDown = false;     // flipped after a failed reach — use localStorage fallback
+let adminSecret = "";    // held in memory after a successful admin login
+
+async function api(body) {
+  if (apiDown) return null;
+  let r;
+  try {
+    r = await fetch(API_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(adminSecret ? { ...body, adminPw: adminSecret } : body),
+    });
+  } catch { apiDown = true; return null; }
+  // A static host without the function serves the SPA's HTML here.
+  if (r.status === 404 || r.status === 405 || !(r.headers.get("content-type") || "").includes("json")) {
+    apiDown = true; return null;
+  }
+  try { return await r.json(); } catch { return null; }
+}
+
+const localFallback = {
   async get(key) {
     try { const r = await window.storage.get(key, false); return r ? JSON.parse(r.value) : null; }
     catch { return null; }
@@ -186,6 +213,52 @@ const store = {
     try { await window.storage.set(key, JSON.stringify(val), false); } catch {}
   },
 };
+
+const store = {
+  async get(key) {
+    const res = await api({ action: "get", key });
+    if (res && "value" in res) return res.value;
+    return localFallback.get(key);
+  },
+  async set(key, val) {
+    const res = await api({ action: "set", key, value: val });
+    if (res && res.ok) {
+      // Changing the admin password invalidates the in-memory credential.
+      if (key === "admin_pw" && typeof val === "string" && val) adminSecret = val;
+      return;
+    }
+    return localFallback.set(key, val);
+  },
+};
+
+// Login check — server-side when the API is up, so passwords never reach the
+// browser; local comparison only in the single-device fallback mode.
+async function verifyPassword(pw) {
+  const res = await api({ action: "verify", password: pw });
+  let role = null;
+  if (res && "role" in res) {
+    role = res.role;
+  } else {
+    const [lp, ap] = await Promise.all([localFallback.get("listener_pw"), localFallback.get("admin_pw")]);
+    role = pw === (ap || DEFAULT_ADMIN_PW) ? "admin" : pw === (lp || DEFAULT_LISTENER_PW) ? "listener" : null;
+  }
+  if (role === "admin") adminSecret = pw;
+  return role;
+}
+
+// Magic-link token check — returns { name } for a valid subscriber token.
+async function matchToken(token) {
+  if (!token) return null;
+  const res = await api({ action: "token", token });
+  if (res && "match" in res) return res.match;
+  const subs = (await localFallback.get("subscribers")) || [];
+  const m = subs.find((s) => s && s.token === token);
+  return m ? { name: m.name } : null;
+}
+
+// The "remember me" token is per-device by design — plain localStorage.
+const localGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const localSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
 
 const DEFAULT_ADMIN_PW    = "admin123";
 const DEFAULT_LISTENER_PW = "family2024";
@@ -223,6 +296,19 @@ const Btn = ({ children, onClick, variant="primary", small, disabled, icon, styl
     </button>
   );
 };
+
+// On-brand back button — quiet hairline ghost that warms to sand on hover,
+// matching the admin header's button language.
+const BackButton = ({ onClick, label = "Back" }) => (
+  <button
+    onClick={onClick}
+    onMouseEnter={(e) => { e.currentTarget.style.color = T.white; e.currentTarget.style.borderColor = T.accents.sand + "66"; }}
+    onMouseLeave={(e) => { e.currentTarget.style.color = T.grayDim; e.currentTarget.style.borderColor = T.line; }}
+    style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "none", border: `1px solid ${T.line}`, borderRadius: 9, padding: "7px 14px", color: T.grayDim, cursor: "pointer", fontSize: 13, fontFamily: T.font, fontWeight: 600, letterSpacing: .2, transition: "color .15s, border-color .15s" }}
+  >
+    <Icon d={Icons.arrowLeft} size={15} stroke={2.2} /> {label}
+  </button>
+);
 
 const Field = ({ label, hint, textarea, ...props }) => (
   <div style={{marginBottom:16}}>
@@ -403,13 +489,21 @@ const ScriptTitle = ({ width=320, style={} }) => (
 );
 
 // ─── Lock Screen ───────────────────────────────────────────────────────────────
-const LockScreen = ({ onUnlock, correctPw, isAdmin, onSimulateMagicLink }) => {
+const LockScreen = ({ onSubmit, onBack, isAdmin, onSimulateMagicLink }) => {
   const [pw, setPw] = useState("");
   const [err, setErr] = useState(false);
-  const submit = () => pw === correctPw ? onUnlock() : (setErr(true), setPw(""));
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (!pw || busy) return;
+    setBusy(true);
+    const ok = await onSubmit(pw);
+    setBusy(false);
+    if (!ok) { setErr(true); setPw(""); }
+  };
   return (
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:32,fontFamily:T.font}}>
       <div style={{width:"100%",maxWidth:400}}>
+        {onBack && <div style={{marginBottom:28}}><BackButton onClick={onBack}/></div>}
         <div style={{marginBottom:36}}>
           <SSMonogram size={44} color={T.accents.sand}/>
         </div>
@@ -423,7 +517,7 @@ const LockScreen = ({ onUnlock, correctPw, isAdmin, onSimulateMagicLink }) => {
           onChange={e=>{setPw(e.target.value);setErr(false)}} onKeyDown={e=>e.key==="Enter"&&submit()}
           style={{width:"100%",boxSizing:"border-box",padding:"14px 16px",borderRadius:12,border:`1px solid ${err?T.accents.red:T.line}`,fontFamily:T.font,fontSize:16,color:T.white,background:T.surface,outline:"none",marginBottom:err?8:16}}/>
         {err && <p style={{fontSize:13,color:T.accents.red,margin:"0 0 12px"}}>Incorrect password, try again.</p>}
-        <Btn onClick={submit} icon={Icons.arrow} style={{width:"100%",justifyContent:"center"}}>Enter</Btn>
+        <Btn onClick={submit} disabled={busy} icon={Icons.arrow} style={{width:"100%",justifyContent:"center"}}>{busy ? "Checking…" : "Enter"}</Btn>
         {!isAdmin && onSimulateMagicLink && (
           <div style={{marginTop:32,paddingTop:24,borderTop:`1px solid ${T.line}`}}>
             <p style={{fontSize:12,color:T.gray,margin:"0 0 12px",lineHeight:1.6}}>
@@ -444,9 +538,15 @@ const SubscribePage = ({ onBack }) => {
   const [toast, setToast] = useState(null);
   const submit = async () => {
     if(!form.name||!form.email){setToast("Please fill in your name and email.");return;}
-    const reqs=(await store.get("subscribe_requests"))||[];
-    reqs.push({...form,id:Date.now(),status:"pending",requestedAt:new Date().toISOString()});
-    await store.set("subscribe_requests",reqs); setSent(true);
+    // Shared backend appends the request server-side; fall back to the
+    // per-browser store when the API isn't available (local demo mode).
+    const res = await api({ action:"request", name:form.name, email:form.email, message:form.message });
+    if (!(res && res.ok)) {
+      const reqs=(await store.get("subscribe_requests"))||[];
+      reqs.push({...form,id:Date.now(),status:"pending",requestedAt:new Date().toISOString()});
+      await store.set("subscribe_requests",reqs);
+    }
+    setSent(true);
   };
   if (sent) return (
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:32,fontFamily:T.font}}>
@@ -456,14 +556,14 @@ const SubscribePage = ({ onBack }) => {
         </div>
         <h1 style={{fontFamily:T.serif,fontSize:44,fontWeight:600,color:T.white,margin:"0 0 10px",letterSpacing:-.5}}>Request sent.</h1>
         <p style={{color:T.grayDim,fontSize:15,margin:"0 0 28px"}}>The Slapes will review your request and reach out when you're approved.</p>
-        <Btn variant="subtle" onClick={onBack}>← Back home</Btn>
+        <BackButton onClick={onBack} label="Back home"/>
       </div>
     </div>
   );
   return (
     <div style={{minHeight:"100vh",background:T.bg,padding:32,fontFamily:T.font}}>
       <div style={{maxWidth:420,margin:"0 auto",paddingTop:40}}>
-        <button onClick={onBack} style={{background:"none",border:"none",color:T.gray,cursor:"pointer",fontSize:13,fontFamily:T.font,marginBottom:32}}>← Back</button>
+        <div style={{marginBottom:32}}><BackButton onClick={onBack}/></div>
         <h1 style={{fontFamily:T.serif,fontSize:44,fontWeight:600,color:T.white,margin:"0 0 8px",letterSpacing:-.5}}>Request access.</h1>
         <p style={{color:T.grayDim,fontSize:14,margin:"0 0 32px"}}>Fill in your details and the Slapes will approve your subscription.</p>
         <Field label="Full name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Jane Slape"/>
@@ -555,7 +655,7 @@ const EpisodeRow = ({ episode, index, isOpen, onToggle }) => {
 };
 
 // ─── Listener Portal ───────────────────────────────────────────────────────────
-const ListenerPortal = ({ onGoSubscribe, welcomeName }) => {
+const ListenerPortal = ({ onGoSubscribe, welcomeName, onBack }) => {
   const [episodes, setEpisodes] = useState([]);
   const [openId, setOpenId] = useState(null);
   useEffect(()=>{ store.get("episodes").then(e=>setEpisodes(e||PLACEHOLDER_EPISODES)); },[]);
@@ -566,7 +666,10 @@ const ListenerPortal = ({ onGoSubscribe, welcomeName }) => {
         {/* Header — SS icon solo (no box, no text) */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:44}}>
           <SSMonogram size={38} color={T.accents.sand}/>
-          <SoftTag color={T.accents.sage}>Private</SoftTag>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <SoftTag color={T.accents.sage}>Private</SoftTag>
+            {onBack && <BackButton onClick={onBack}/>}
+          </div>
         </div>
 
         {/* Greeting — elegant serif */}
@@ -912,19 +1015,17 @@ export default function App() {
   const [screen,setScreen]=useState("home");
   const [listenerUnlocked,setListenerUnlocked]=useState(false);
   const [adminUnlocked,setAdminUnlocked]=useState(false);
-  const [passwords,setPasswords]=useState({listener:DEFAULT_LISTENER_PW,admin:DEFAULT_ADMIN_PW});
   const [checkingLink,setCheckingLink]=useState(true);
   const [welcomeName,setWelcomeName]=useState(null);
 
   useEffect(()=>{
     (async()=>{
-      const [lp,ap]=await Promise.all([store.get("listener_pw"),store.get("admin_pw")]);
-      setPasswords({listener:lp||DEFAULT_LISTENER_PW,admin:ap||DEFAULT_ADMIN_PW});
-      const subscribers=(await store.get("subscribers"))||[];
+      // Magic-link token from the URL, else the per-device remembered token.
+      // Matching happens server-side so the subscriber list never leaves the backend.
       const urlToken=getUrlToken();
-      let matched=urlToken?subscribers.find(s=>s.token===urlToken):null;
-      if(!matched){ let remembered=null; try{remembered=await store.get(REMEMBER_KEY);}catch{} if(remembered)matched=subscribers.find(s=>s.token===remembered); }
-      if(matched){ try{await store.set(REMEMBER_KEY,matched.token);}catch{} setListenerUnlocked(true); setScreen("listen"); setWelcomeName(matched.name); }
+      let token=urlToken, matched=urlToken?await matchToken(urlToken):null;
+      if(!matched){ const remembered=localGet(REMEMBER_KEY); if(remembered){ matched=await matchToken(remembered); token=remembered; } }
+      if(matched){ localSet(REMEMBER_KEY,token); setListenerUnlocked(true); setScreen("listen"); setWelcomeName(matched.name); }
       setCheckingLink(false);
     })();
   },[]);
@@ -939,17 +1040,22 @@ export default function App() {
   if (screen==="subscribe") return <SubscribePage onBack={()=>setScreen("home")}/>;
 
   if (screen==="listen") {
-    if (!listenerUnlocked) return <LockScreen correctPw={passwords.listener} onUnlock={()=>setListenerUnlocked(true)} isAdmin={false} onSimulateMagicLink={async()=>{
-      const subs=(await store.get("subscribers"))||[]; const who=subs[0];
-      if(who){ try{await store.set(REMEMBER_KEY,who.token);}catch{} setWelcomeName(who.name); }
-      setListenerUnlocked(true);
-    }}/>;
-    return <ListenerPortal onGoSubscribe={()=>setScreen("subscribe")} welcomeName={welcomeName}/>;
+    if (!listenerUnlocked) return <LockScreen isAdmin={false} onBack={()=>setScreen("home")}
+      onSubmit={async(pw)=>{ const role=await verifyPassword(pw); if(role){setListenerUnlocked(true);return true;} return false; }}
+      onSimulateMagicLink={async()=>{
+        // Preview-only shortcut; subscriber names aren't public on the shared
+        // backend, so this may unlock without a name there.
+        const subs=(await store.get("subscribers"))||[]; const who=Array.isArray(subs)?subs[0]:null;
+        if(who){ localSet(REMEMBER_KEY,who.token); setWelcomeName(who.name); }
+        setListenerUnlocked(true);
+      }}/>;
+    return <ListenerPortal onGoSubscribe={()=>setScreen("subscribe")} welcomeName={welcomeName} onBack={()=>setScreen("home")}/>;
   }
 
   if (screen==="admin") {
-    if (!adminUnlocked) return <LockScreen correctPw={passwords.admin} onUnlock={()=>setAdminUnlocked(true)} isAdmin={true}/>;
-    return <AdminDashboard onLogout={()=>{setAdminUnlocked(false);setScreen("home");}}/>;
+    if (!adminUnlocked) return <LockScreen isAdmin={true} onBack={()=>setScreen("home")}
+      onSubmit={async(pw)=>{ const role=await verifyPassword(pw); if(role==="admin"){setAdminUnlocked(true);return true;} return false; }}/>;
+    return <AdminDashboard onLogout={()=>{adminSecret="";setAdminUnlocked(false);setScreen("home");}}/>;
   }
   return null;
 }

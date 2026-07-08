@@ -2,6 +2,9 @@
   command = "npm run build"
   publish = "dist"
 
+[functions]
+  directory = "netlify/functions"
+
 # Single-page app: serve index.html for any path so refreshes never 404
 [[redirects]]
   from = "/*"

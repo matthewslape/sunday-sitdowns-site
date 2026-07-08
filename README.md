@@ -30,9 +30,11 @@ This produces a `dist/` folder of static files. Deploy it anywhere that serves s
 - **Cloudflare Pages** (recommended — same account as your R2 audio): connect this GitHub repo, framework preset *Vite*, build command `npm run build`, output directory `dist`.
 - **Netlify / Vercel:** same settings, or drag-and-drop the `dist` folder into Netlify for a zero-config first deploy.
 
-## ⚠️ Important limitation: storage is per-browser
+## Shared storage (multi-device)
 
-`src/storage.js` swaps the original environment's storage API for `localStorage`. That means **data is not shared between visitors** — episodes you post as admin exist only in *your* browser. This is fine for testing the design, players, and flows. Before the family actually uses it, replace `src/storage.js` with a shared backend (Cloudflare Workers KV pairs naturally with Pages; Supabase or Firebase also work) keeping the same four methods: `get`, `set`, `delete`, `list`.
+Data lives in a shared backend: a Netlify Function (`netlify/functions/store.mjs`) backed by **Netlify Blobs**. Episodes, subscribers, access requests, and settings are the same for every family member on every device — no extra accounts or configuration needed beyond deploying to Netlify. Passwords are verified server-side and never sent to visitors' browsers.
+
+When the API isn't reachable (e.g. running plain `vite` locally instead of `netlify dev`), the app falls back to the per-browser `localStorage` shim in `src/storage.js`, so local demos still work — just without sharing.
 
 ## Episode hosting cheat-sheet
 

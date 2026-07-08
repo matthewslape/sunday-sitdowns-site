@@ -3,11 +3,11 @@
 // On a normal website that API doesn't exist, so this shim provides the same
 // interface backed by the browser's localStorage.
 //
-// IMPORTANT LIMITATION: localStorage is per-browser, per-device. Episodes and
-// subscribers saved here live only in the browser that saved them — they are
-// NOT shared between visitors. Fine for testing and single-admin demos; for a
-// real multi-user site, replace this file with calls to a shared backend
-// (e.g. Cloudflare Workers KV, Supabase, or Firebase) keeping the same API.
+// NOTE: This shim is now the FALLBACK only. In production the app talks to
+// the shared backend at /api/store (netlify/functions/store.mjs, backed by
+// Netlify Blobs), so data is shared across all visitors and devices. This
+// localStorage version kicks in only when that API is unreachable — e.g.
+// plain `vite` dev without Netlify — keeping single-device demos working.
 
 const PREFIX = "ssd:";
 
