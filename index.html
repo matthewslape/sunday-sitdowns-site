@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sunday Sit Downs</title>
     <meta name="description" content="A private podcast for family." />
-    <meta name="theme-color" content="#0A0A0B" />
+    <meta name="theme-color" content="#172713" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -16,8 +16,45 @@
       href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500;600;700;800;900&display=swap"
     />
     <style>
-      html, body { margin: 0; background: #0A0A0B; }
+      /* ─── Brand palette themes (Sunday Sit Downs — MP058) ───────────────────
+         Structural tokens flip between light and dark; the two accents
+         (Chinese Lantern orange, Cassiopeia mint) stay constant and live in
+         the app. Dark is the default. */
+      :root, :root[data-theme="dark"] {
+        --bg:       #172713;             /* Deep Slate Olive */
+        --surface:  #374231;             /* Sensaimidori Green */
+        --surface2: #414d3b;             /* Sensaimidori, lifted for raised cards */
+        --line:     rgba(174,208,201,.20); /* Cassiopeia hairline */
+        --text:     #F7F7F7;             /* Lynx White */
+        --gray:     #8fa89f;             /* dimmed Cassiopeia — muted text */
+        --grayDim:  #AED0C9;             /* Cassiopeia — secondary text */
+        --logo-filter: none;             /* logo art is already light */
+      }
+      :root[data-theme="light"] {
+        --bg:       #E5EBEA;             /* Dream Catcher */
+        --surface:  #F7F7F7;             /* Lynx White */
+        --surface2: #dbe6e2;             /* Dream Catcher / Cassiopeia lift */
+        --line:     rgba(55,66,49,.18);  /* Sensaimidori hairline */
+        --text:     #172713;             /* Deep Slate Olive */
+        --gray:     #5f6f5c;             /* muted Sensaimidori */
+        --grayDim:  #374231;             /* Sensaimidori — secondary text */
+        /* recolor the cream logo art to deep olive for the light background */
+        --logo-filter: brightness(0) saturate(100%) invert(11%) sepia(24%) saturate(1400%) hue-rotate(75deg) brightness(92%) contrast(92%);
+      }
+      html, body { margin: 0; background: var(--bg); }
     </style>
+    <script>
+      /* Apply the saved theme before first paint to avoid a flash. */
+      (function () {
+        try {
+          var t = localStorage.getItem("ssd_theme");
+          if (t !== "light" && t !== "dark") t = "dark";
+          document.documentElement.dataset.theme = t;
+        } catch (e) {
+          document.documentElement.dataset.theme = "dark";
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

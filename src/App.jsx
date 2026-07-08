@@ -27,43 +27,54 @@ function buildMagicLink(token) {
 }
 const REMEMBER_KEY = "ssd_remembered_token";
 
-// ─── Design Tokens (dark UI, Sunday Sit Downs brand — warm editorial) ──────────
+// ─── Design Tokens (Sunday Sit Downs brand — MP058 palette, light + dark) ──────
+// Structural tokens are CSS variables defined in index.html and flipped by the
+// `data-theme` attribute on <html> (see ThemeToggle). Accents are constant hex
+// in both themes: they're used with alpha-append and luminance math, and the
+// two brand accents (Chinese Lantern, Cassiopeia) read well on either bg.
+//
+// Palette:  Lynx White #F7F7F7 · Dream Catcher #E5EBEA · Cassiopeia #AED0C9
+//           Chinese Lantern #F09056 · Deep Slate Olive #172713 · Sensaimidori #374231
+const LANTERN = "#F09056";   // warm accent — play, CTAs, vodcast, highlights, alerts
+const CASSIO  = "#AED0C9";   // cool accent — private / success
+const SENSAI  = "#374231";   // deep green — used as an occasional card block
 const T = {
-  bg:       "#0A0A0B",   // near-black background (kept per request)
-  surface:  "#121310",   // card surface — faint warm/green tint
-  surface2: "#1A201F",   // raised surface — the brand's dark green-black (logo tile)
-  line:     "#242521",   // hairline borders
-  white:    "#F8EDDB",   // primary text — brand cream
-  gray:     "#7C786E",   // muted warm gray
-  grayDim:  "#A8A294",   // secondary warm text
+  bg:       "var(--bg)",
+  surface:  "var(--surface)",
+  surface2: "var(--surface2)",
+  line:     "var(--line)",
+  white:    "var(--text)",     // primary text (name kept for existing references)
+  gray:     "var(--gray)",
+  grayDim:  "var(--grayDim)",
 
   font:     "'Inter', system-ui, sans-serif",
   serif:    "'Cormorant Garamond', Georgia, serif",  // high-contrast elegant serif for headings
 
-  // Brand palette — lifted directly from the new Color_Pallete.svg
+  // Brand accents (constant across themes). Legacy keys are kept as aliases so
+  // every existing reference resolves onto the two-accent palette.
   accents: {
-    cream:     "#F8EDDB",  // light cream (primary text / surfaces)
-    sand:      "#F7DFB9",  // warm sand — the logo stroke color
-    marigold:  "#FFA74E",  // amber/marigold — highlights, play
-    vermilion: "#F0531C",  // burnt orange — vodcast, alerts
-    forest:    "#0A332D",  // deep forest green
-    sage:      "#2F4B3C",  // pine/sage green — private, confirmations
+    cream:     "#F7F7F7",  // Lynx White
+    sand:      LANTERN,    // brand mark / primary CTA — warm pop on both themes
+    marigold:  LANTERN,
+    vermilion: LANTERN,
+    forest:    SENSAI,
+    sage:      CASSIO,     // private / confirmations
     // aliases kept so existing references resolve cleanly
-    green:     "#2F4B3C",
-    sky:       "#F7DFB9",
-    turquoise: "#F7DFB9",
-    orange:    "#F0531C",
-    purple:    "#FFA74E",
-    lightGreen:"#2F4B3C",
-    blue:      "#F7DFB9",
-    yellow:    "#FFA74E",
-    pink:      "#F0531C",
-    red:       "#F0531C",
-    cobalt:    "#F7DFB9",
+    green:     SENSAI,
+    sky:       CASSIO,
+    turquoise: CASSIO,
+    orange:    LANTERN,
+    purple:    LANTERN,
+    lightGreen:CASSIO,
+    blue:      CASSIO,
+    yellow:    LANTERN,
+    pink:      LANTERN,
+    red:       LANTERN,
+    cobalt:    CASSIO,
   },
 };
-// Rotating accent colors for episode tags — warm brand palette, used subtly
-const TAG_CYCLE = [T.accents.sand, T.accents.marigold, T.accents.sage, T.accents.vermilion, T.accents.forest];
+// Rotating accent colors for episode tag blocks — orange, mint, deep green.
+const TAG_CYCLE = [LANTERN, CASSIO, SENSAI];
 
 // ─── Icons (inline SVG, stroke-based, elegant) ─────────────────────────────────
 const Icon = ({ d, size=18, stroke=2, fill="none", color="currentColor", style={} }) => (
@@ -88,6 +99,8 @@ const Icons = {
   x:       ["M18 6L6 18","M6 6l12 12"],
   arrow:   ["M5 12h14","M12 5l7 7-7 7"],
   arrowLeft:["M19 12H5","M12 19l-7-7 7-7"],
+  sun:     ["M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z","M12 1v2","M12 21v2","M4.22 4.22l1.42 1.42","M18.36 18.36l1.42 1.42","M1 12h2","M21 12h2","M4.22 19.78l1.42-1.42","M18.36 5.64l1.42-1.42"],
+  moon:    "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z",
   dot:     "M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0",
   lock:    ["M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z","M7 11V7a5 5 0 0 1 10 0v4"],
   logout:  ["M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4","M16 17l5-5-5-5","M21 12H9"],
@@ -310,6 +323,37 @@ const BackButton = ({ onClick, label = "Back" }) => (
   </button>
 );
 
+// ─── Theme toggle ───────────────────────────────────────────────────────────────
+// Flips the `data-theme` attribute on <html>, which swaps the CSS color
+// variables instantly (no re-render). Choice persists in localStorage; the
+// initial value is applied pre-paint by the inline script in index.html.
+function currentTheme() {
+  if (typeof document === "undefined") return "dark";
+  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+}
+const ThemeToggle = ({ style={} }) => {
+  const [theme, setTheme] = useState(currentTheme());
+  const toggle = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("ssd_theme", next); } catch {}
+    setTheme(next);
+  };
+  const dark = theme === "dark";
+  return (
+    <button
+      onClick={toggle}
+      aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+      title={dark ? "Light mode" : "Dark mode"}
+      onMouseEnter={(e)=>{e.currentTarget.style.color=T.accents.sand;e.currentTarget.style.borderColor=T.accents.sand+"66";}}
+      onMouseLeave={(e)=>{e.currentTarget.style.color=T.grayDim;e.currentTarget.style.borderColor="var(--line)";}}
+      style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:36,height:36,background:"none",border:`1px solid ${T.line}`,borderRadius:9,color:T.grayDim,cursor:"pointer",transition:"color .15s, border-color .15s",...style}}
+    >
+      <Icon d={dark ? Icons.sun : Icons.moon} size={17} stroke={2}/>
+    </button>
+  );
+};
+
 const Field = ({ label, hint, textarea, ...props }) => (
   <div style={{marginBottom:16}}>
     {label && <label style={{display:"block",marginBottom:6,fontSize:11,color:T.grayDim,fontFamily:T.font,fontWeight:600,letterSpacing:.6,textTransform:"uppercase"}}>{label}</label>}
@@ -485,7 +529,7 @@ const Wordmark = ({ width=260, variant="cream", style={} }) => (
 // Script lockup — "Sunday Sit Downs / with the Slape's" (stands alone, hero use)
 const ScriptTitle = ({ width=320, style={} }) => (
   <img src={SCRIPT_TITLE} alt="Sunday Sit Downs with the Slape's"
-       style={{width,height:"auto",display:"block",...style}}/>
+       style={{width,height:"auto",display:"block",filter:"var(--logo-filter)",...style}}/>
 );
 
 // ─── Lock Screen ───────────────────────────────────────────────────────────────
@@ -503,7 +547,10 @@ const LockScreen = ({ onSubmit, onBack, isAdmin, onSimulateMagicLink }) => {
   return (
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:32,fontFamily:T.font}}>
       <div style={{width:"100%",maxWidth:400}}>
-        {onBack && <div style={{marginBottom:28}}><BackButton onClick={onBack}/></div>}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:28}}>
+          {onBack ? <BackButton onClick={onBack}/> : <span/>}
+          <ThemeToggle/>
+        </div>
         <div style={{marginBottom:36}}>
           <SSMonogram size={44} color={T.accents.sand}/>
         </div>
@@ -563,7 +610,10 @@ const SubscribePage = ({ onBack }) => {
   return (
     <div style={{minHeight:"100vh",background:T.bg,padding:32,fontFamily:T.font}}>
       <div style={{maxWidth:420,margin:"0 auto",paddingTop:40}}>
-        <div style={{marginBottom:32}}><BackButton onClick={onBack}/></div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:32}}>
+          <BackButton onClick={onBack}/>
+          <ThemeToggle/>
+        </div>
         <h1 style={{fontFamily:T.serif,fontSize:44,fontWeight:600,color:T.white,margin:"0 0 8px",letterSpacing:-.5}}>Request access.</h1>
         <p style={{color:T.grayDim,fontSize:14,margin:"0 0 32px"}}>Fill in your details and the Slapes will approve your subscription.</p>
         <Field label="Full name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Jane Slape"/>
@@ -577,27 +627,30 @@ const SubscribePage = ({ onBack }) => {
 };
 
 // Pick a readable ink color for text sitting on a filled brand color.
-// Light/warm colors (sand, cream, marigold) → dark ink; dark colors (forest, sage) → cream.
+// Light accents (Chinese Lantern, Cassiopeia, Lynx) → deep-olive ink;
+// dark accents (Sensaimidori) → light ink.
+const INK_DARK  = "#172713"; // Deep Slate Olive
+const INK_LIGHT = "#F7F7F7"; // Lynx White
 function onColorInk(hex) {
   const h = hex.replace("#","");
   const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
   const lum = (0.299*r + 0.587*g + 0.114*b);
-  return lum > 120 ? "#1A140A" : "#F8EDDB"; // 120: vermilion (123.7) takes dark ink (5.2:1) instead of cream (3.0:1)
+  return lum > 120 ? INK_DARK : INK_LIGHT; // Lantern (166) & Cassiopeia (197) take dark ink; Sensai (61) takes light
 }
 // Translucent overlay tint that adapts to the ink color (for pills/insets on a color block)
-const inkOverlay = (ink, a) => ink === "#1A140A" ? `rgba(26,20,10,${a})` : `rgba(248,237,219,${a})`;
+const inkOverlay = (ink, a) => ink === INK_DARK ? `rgba(23,39,19,${a})` : `rgba(247,247,247,${a})`;
 
 // ─── Featured Episode (magazine hero — large, editorial) ───────────────────────
 const FeaturedEpisode = ({ episode, isOpen, onToggle }) => {
   const accent = T.accents.marigold;
-  const ink = "#1A140A";
+  const ink = "#172713";
   const isVideo = episode.type === "video";
   return (
     <div style={{background:accent,borderRadius:22,marginBottom:32,overflow:"hidden"}}>
       <div style={{padding:"30px 30px 28px"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
           <span style={{display:"inline-flex",alignItems:"center",gap:6,background:ink,color:accent,fontSize:11,fontWeight:800,padding:"4px 11px",borderRadius:7,letterSpacing:.8,textTransform:"uppercase"}}>★ Latest</span>
-          <span style={{display:"inline-flex",alignItems:"center",background:"rgba(26,20,10,.16)",color:ink,fontSize:11,fontWeight:800,padding:"4px 10px",borderRadius:7,letterSpacing:.4,textTransform:"uppercase"}}>{isVideo ? "Vodcast" : "Podcast"}</span>
+          <span style={{display:"inline-flex",alignItems:"center",background:"rgba(23,39,19,.16)",color:ink,fontSize:11,fontWeight:800,padding:"4px 10px",borderRadius:7,letterSpacing:.4,textTransform:"uppercase"}}>{isVideo ? "Vodcast" : "Podcast"}</span>
           <span style={{fontSize:12,color:ink,opacity:.7,fontWeight:600}}>{prettyDate(episode.date)}</span>
         </div>
         <h2 style={{margin:"0 0 12px",fontFamily:T.serif,fontSize:44,fontWeight:600,color:ink,letterSpacing:-.5,lineHeight:1.02}}>{episode.title}</h2>
@@ -668,6 +721,7 @@ const ListenerPortal = ({ onGoSubscribe, welcomeName, onBack }) => {
           <SSMonogram size={38} color={T.accents.sand}/>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <SoftTag color={T.accents.sage}>Private</SoftTag>
+            <ThemeToggle/>
             {onBack && <BackButton onClick={onBack}/>}
           </div>
         </div>
@@ -739,7 +793,7 @@ const EpisodeManager = ({ episodes, setEpisodes, setToast }) => {
         <Panel style={{border:`1px solid ${T.accents.marigold}44`}}>
           <div style={{display:"flex",gap:10,marginBottom:18}}>
             {[{v:"audio",label:"Podcast",icon:Icons.mic},{v:"video",label:"Vodcast",icon:Icons.film}].map(t=>(
-              <button key={t.v} onClick={()=>setForm({...form,type:t.v})} style={{display:"inline-flex",alignItems:"center",gap:7,padding:"8px 16px",borderRadius:24,background:form.type===t.v?T.accents.sand:"transparent",color:form.type===t.v?"#1A140A":T.grayDim,fontFamily:T.font,fontSize:13,fontWeight:600,cursor:"pointer",border:`1px solid ${form.type===t.v?T.accents.sand:T.line}`}}>
+              <button key={t.v} onClick={()=>setForm({...form,type:t.v})} style={{display:"inline-flex",alignItems:"center",gap:7,padding:"8px 16px",borderRadius:24,background:form.type===t.v?T.accents.sand:"transparent",color:form.type===t.v?"#172713":T.grayDim,fontFamily:T.font,fontSize:13,fontWeight:600,cursor:"pointer",border:`1px solid ${form.type===t.v?T.accents.sand:T.line}`}}>
                 <Icon d={t.icon} size={15} stroke={2}/>{t.label}
               </button>
             ))}
@@ -829,13 +883,13 @@ const SubscriberManager = ({ setToast }) => {
             <div key={req.id} style={{background:T.accents.marigold,borderRadius:14,padding:"16px 18px",marginBottom:12}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
                 <div>
-                  <div style={{fontWeight:800,color:"#1A140A",fontSize:15}}>{req.name}</div>
-                  <div style={{fontSize:13,color:"#1A140A",opacity:.75,fontWeight:600}}>{req.email}</div>
-                  {req.message&&<div style={{fontSize:12,color:"#1A140A",opacity:.7,marginTop:4,fontStyle:"italic"}}>"{req.message}"</div>}
+                  <div style={{fontWeight:800,color:"#172713",fontSize:15}}>{req.name}</div>
+                  <div style={{fontSize:13,color:"#172713",opacity:.75,fontWeight:600}}>{req.email}</div>
+                  {req.message&&<div style={{fontSize:12,color:"#172713",opacity:.7,marginTop:4,fontStyle:"italic"}}>"{req.message}"</div>}
                 </div>
                 <div style={{display:"flex",gap:8}}>
-                  <button onClick={()=>approve(req)} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:9,background:"#1A140A",color:T.accents.marigold,border:"none",cursor:"pointer",fontFamily:T.font,fontWeight:700,fontSize:13}}><Icon d={Icons.check} size={15} stroke={2.4}/> Approve</button>
-                  <button onClick={()=>deny(req)} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:9,background:"rgba(26,20,10,.16)",color:"#1A140A",border:"none",cursor:"pointer",fontFamily:T.font,fontWeight:700,fontSize:13}}><Icon d={Icons.x} size={15} stroke={2.4}/> Deny</button>
+                  <button onClick={()=>approve(req)} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:9,background:"#172713",color:T.accents.marigold,border:"none",cursor:"pointer",fontFamily:T.font,fontWeight:700,fontSize:13}}><Icon d={Icons.check} size={15} stroke={2.4}/> Approve</button>
+                  <button onClick={()=>deny(req)} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:9,background:"rgba(23,39,19,.16)",color:"#172713",border:"none",cursor:"pointer",fontFamily:T.font,fontWeight:700,fontSize:13}}><Icon d={Icons.x} size={15} stroke={2.4}/> Deny</button>
                 </div>
               </div>
             </div>
@@ -955,9 +1009,12 @@ const AdminDashboard = ({ onLogout }) => {
             <SSMonogram size={30} color={T.accents.sand}/>
             <SoftTag color={T.accents.marigold}>Admin</SoftTag>
           </div>
-          <button onClick={onLogout} style={{display:"inline-flex",alignItems:"center",gap:7,background:"none",border:`1px solid ${T.line}`,borderRadius:9,padding:"7px 12px",color:T.grayDim,cursor:"pointer",fontSize:13,fontFamily:T.font}}>
-            <Icon d={Icons.logout} size={15} stroke={2}/> Log out
-          </button>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <ThemeToggle/>
+            <button onClick={onLogout} style={{display:"inline-flex",alignItems:"center",gap:7,background:"none",border:`1px solid ${T.line}`,borderRadius:9,padding:"7px 12px",color:T.grayDim,cursor:"pointer",fontSize:13,fontFamily:T.font}}>
+              <Icon d={Icons.logout} size={15} stroke={2}/> Log out
+            </button>
+          </div>
         </div>
       </div>
       <div style={{borderBottom:`1px solid ${T.line}`}}>
@@ -983,9 +1040,12 @@ const AdminDashboard = ({ onLogout }) => {
 const HomePage = ({ onListen, onSubscribe, onAdmin }) => (
   <div style={{minHeight:"100vh",background:T.bg,fontFamily:T.font,display:"flex",flexDirection:"column",padding:"40px 32px"}}>
     <div style={{width:"100%",maxWidth:1100,margin:"0 auto",flex:1,display:"flex",flexDirection:"column"}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:"auto"}}>
-        <span style={{width:7,height:7,borderRadius:"50%",background:T.accents.sage,display:"inline-block"}}/>
-        <div style={{fontSize:12,color:T.gray,fontFamily:T.font}}>Private · family only</div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"auto"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{width:7,height:7,borderRadius:"50%",background:T.accents.sage,display:"inline-block"}}/>
+          <div style={{fontSize:12,color:T.gray,fontFamily:T.font}}>Private · family only</div>
+        </div>
+        <ThemeToggle/>
       </div>
 
       <div style={{maxWidth:480}}>
@@ -994,7 +1054,7 @@ const HomePage = ({ onListen, onSubscribe, onAdmin }) => (
           A private podcast for family.
         </p>
         <div style={{display:"flex",flexDirection:"column",gap:12,maxWidth:360}}>
-          <button onClick={onListen} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"15px 22px",borderRadius:12,background:T.accents.sand,color:T.bg,fontFamily:T.font,fontWeight:700,fontSize:15,border:"none",cursor:"pointer"}}>
+          <button onClick={onListen} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"15px 22px",borderRadius:12,background:T.accents.sand,color:onColorInk(T.accents.sand),fontFamily:T.font,fontWeight:700,fontSize:15,border:"none",cursor:"pointer"}}>
             Listen &amp; Watch <Icon d={Icons.arrow} size={18} stroke={2.2}/>
           </button>
           <button onClick={onSubscribe} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"15px 22px",borderRadius:12,background:T.surface,color:T.white,fontFamily:T.font,fontWeight:600,fontSize:15,border:`1px solid ${T.line}`,cursor:"pointer"}}>
