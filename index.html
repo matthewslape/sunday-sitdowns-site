@@ -4,9 +4,29 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sunday Sit Downs</title>
-    <meta name="description" content="A private podcast for family." />
+    <meta name="description" content="A private podcast & vodcast for the family — listen and watch, family only." />
     <meta name="theme-color" content="#17181A" />
+
+    <!-- Icons -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- Link preview / share card (Open Graph + Twitter).
+         __SITE_URL__ is replaced with the deploy's absolute URL at build time
+         by scripts/inject-site-url.mjs (Netlify's $URL). -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Sunday Sit Downs" />
+    <meta property="og:title" content="Sunday Sit Downs" />
+    <meta property="og:description" content="A private podcast & vodcast for the family — listen and watch, family only." />
+    <meta property="og:url" content="__SITE_URL__/" />
+    <meta property="og:image" content="__SITE_URL__/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Sunday Sit Downs with the Slape's — a private podcast for the family" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Sunday Sit Downs" />
+    <meta name="twitter:description" content="A private podcast & vodcast for the family — listen and watch, family only." />
+    <meta name="twitter:image" content="__SITE_URL__/og-image.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!-- id matches the app's runtime font injector so it won't double-load -->

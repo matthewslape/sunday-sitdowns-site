@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build"
+  command = "npm run build && node scripts/inject-site-url.mjs"
   publish = "dist"
 
 [functions]

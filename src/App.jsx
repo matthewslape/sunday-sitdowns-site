@@ -86,8 +86,8 @@ const Icons = {
   pause:   ["M6 4h4v16H6z","M14 4h4v16h-4z"],
   mic:     ["M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z","M19 10v1a7 7 0 0 1-14 0v-1","M12 18v4","M8 22h8"],
   video:   ["M23 7l-7 5 7 5V7z","M14 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"],
-  back15:  ["M11 12a4 4 0 1 1-4-4","M7 5l-3 3 3 3"],
-  fwd15:   ["M13 12a4 4 0 1 0 4-4","M17 5l3 3-3 3"],
+  back15:  ["M1 4v6h6","M3.51 15a9 9 0 1 0 2.13-9.36L1 10"],   // circular skip-back arrow
+  fwd15:   ["M23 4v6h-6","M20.49 15a9 9 0 1 1-2.12-9.36L23 10"], // circular skip-forward arrow
   volume:  ["M11 5L6 9H2v6h4l5 4V5z","M15.5 8.5a5 5 0 0 1 0 7","M19 5a9 9 0 0 1 0 14"],
   link:    ["M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5","M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5"],
   copy:    ["M9 9h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V11a2 2 0 0 1 2-2z","M5 15H4a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1"],
@@ -443,14 +443,16 @@ const AudioPlayer = ({ src, accent }) => {
       </div>
       {/* controls */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:24}}>
-        <button onClick={()=>skip(-15)} title="Back 15s" style={{background:"none",border:"none",cursor:"pointer",color:T.grayDim,display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <Icon d={Icons.back15} size={22} stroke={2}/>
+        <button onClick={()=>skip(-15)} title="Back 15 seconds" style={{position:"relative",background:"none",border:"none",cursor:"pointer",color:T.grayDim,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Icon d={Icons.back15} size={26} stroke={2}/>
+          <span style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,fontFamily:T.font,letterSpacing:-.3,paddingTop:2}}>15</span>
         </button>
-        <button onClick={toggle} style={{width:54,height:54,borderRadius:"50%",background:accent,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#0a0a0a",flexShrink:0}}>
-          <Icon d={playing?Icons.pause:Icons.play} size={22} fill="#0a0a0a" color="#0a0a0a" stroke={0}/>
+        <button onClick={toggle} style={{width:54,height:54,borderRadius:"50%",background:accent,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:onColorInk(accent),flexShrink:0}}>
+          <Icon d={playing?Icons.pause:Icons.play} size={22} fill={onColorInk(accent)} color={onColorInk(accent)} stroke={0}/>
         </button>
-        <button onClick={()=>skip(15)} title="Forward 15s" style={{background:"none",border:"none",cursor:"pointer",color:T.grayDim,display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <Icon d={Icons.fwd15} size={22} stroke={2}/>
+        <button onClick={()=>skip(15)} title="Forward 15 seconds" style={{position:"relative",background:"none",border:"none",cursor:"pointer",color:T.grayDim,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Icon d={Icons.fwd15} size={26} stroke={2}/>
+          <span style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,fontFamily:T.font,letterSpacing:-.3,paddingTop:2}}>15</span>
         </button>
       </div>
       {/* volume */}
