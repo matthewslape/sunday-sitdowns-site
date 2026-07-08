@@ -155,6 +155,32 @@ function prettyDate(d) {
   if (isNaN(date)) return d;
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
+// Relative recency ("3 days ago") so listeners can tell at a glance how fresh
+// an episode is. Future or unparseable dates return "".
+function timeAgo(d) {
+  if (!d) return "";
+  const date = new Date(d + (d.length === 10 ? "T00:00:00" : ""));
+  if (isNaN(date)) return "";
+  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
+  if (days < 0) return "";
+  if (days === 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 14) return `${days} days ago`;
+  if (days < 60) return `${Math.floor(days / 7)} weeks ago`;
+  if (days < 365) return `${Math.floor(days / 30)} months ago`;
+  const y = Math.floor(days / 365);
+  return y === 1 ? "1 year ago" : `${y} years ago`;
+}
+// "Published <date> · <recency>" line used on the listener episode cards.
+const PublishedDate = ({ date, style={} }) => {
+  if (!date) return null;
+  const ago = timeAgo(date);
+  return (
+    <span style={{fontSize:12,color:T.gray,fontWeight:600,...style}}>
+      Published {prettyDate(date)}{ago ? <span style={{opacity:.75}}> · {ago}</span> : null}
+    </span>
+  );
+};
 
 // ─── EmailJS ───────────────────────────────────────────────────────────────────
 let emailjsReady = false;
@@ -499,7 +525,7 @@ const VideoPlayer = ({ src, accent }) => {
         </div>
       )}
       <div style={{borderRadius:12,overflow:"hidden",background:"#000"}}>
-        <video src={src} controls controlsList="nodownload" onError={()=>setFailed(true)} style={{width:"100%",display:"block",maxHeight:420}} preload="metadata"/>
+        <video src={src} controls controlsList="nodownload" onError={()=>setFailed(true)} style={{width:"100%",display:"block",maxHeight:560}} preload="metadata"/>
       </div>
     </div>
   );
@@ -649,7 +675,7 @@ const FeaturedEpisode = ({ episode, isOpen, onToggle }) => {
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
           <span style={{display:"inline-flex",alignItems:"center",gap:6,background:accent,color:btnInk,fontSize:11,fontWeight:800,padding:"4px 11px",borderRadius:7,letterSpacing:.8,textTransform:"uppercase"}}>★ Latest</span>
           <span style={{display:"inline-flex",alignItems:"center",background:T.surface2,color:T.grayDim,fontSize:11,fontWeight:800,padding:"4px 10px",borderRadius:7,letterSpacing:.4,textTransform:"uppercase"}}>{isVideo ? "Vodcast" : "Podcast"}</span>
-          <span style={{fontSize:12,color:T.gray,fontWeight:600}}>{prettyDate(episode.date)}</span>
+          <PublishedDate date={episode.date}/>
         </div>
         <h2 style={{margin:"0 0 12px",fontFamily:T.serif,fontSize:44,fontWeight:600,color:T.white,letterSpacing:-.5,lineHeight:1.02}}>{episode.title}</h2>
         {episode.notes && <p style={{margin:"0 0 24px",fontSize:15,color:T.grayDim,lineHeight:1.6,maxWidth:520,fontWeight:500}}>{episode.notes}</p>}
@@ -677,12 +703,14 @@ const EpisodeRow = ({ episode, index, isOpen, onToggle }) => {
   const isVideo = episode.type === "video";
   const ctrlInk = onColorInk(accent);    // dark ink on the orange control
   return (
-    <div style={{background:T.surface,border:`1px solid ${isOpen?accent:T.line}`,borderRadius:16,marginBottom:0,overflow:"hidden",transition:"border-color .15s"}}>
+    // Vodcast cards span the full grid row so the embedded video plays large;
+    // audio cards keep the compact multi-column layout.
+    <div style={{background:T.surface,border:`1px solid ${isOpen?accent:T.line}`,borderRadius:16,marginBottom:0,overflow:"hidden",transition:"border-color .15s",...(isVideo?{gridColumn:"1 / -1"}:{})}}>
       <div style={{padding:"18px 20px",display:"flex",alignItems:"center",gap:14,cursor:"pointer"}} onClick={onToggle}>
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
             <span style={{display:"inline-flex",alignItems:"center",background:T.surface2,color:T.grayDim,fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:6,letterSpacing:.4,textTransform:"uppercase"}}>{isVideo ? "Vodcast" : "Podcast"}</span>
-            <span style={{fontSize:12,color:T.gray,fontWeight:600}}>{prettyDate(episode.date)}</span>
+            <PublishedDate date={episode.date}/>
           </div>
           <h2 style={{margin:0,fontFamily:T.serif,fontSize:22,fontWeight:600,color:T.white,letterSpacing:-.2,lineHeight:1.2}}>{episode.title}</h2>
           {episode.notes && <p style={{margin:"5px 0 0",fontSize:13,color:T.grayDim,lineHeight:1.5,fontWeight:500}}>{episode.notes}</p>}
