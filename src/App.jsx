@@ -1078,7 +1078,7 @@ const HomePage = ({ onListen, onSubscribe, onAdmin }) => (
           A private podcast for family.
         </p>
         <div style={{display:"flex",flexDirection:"column",gap:12,maxWidth:360}}>
-          <button onClick={onListen} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"15px 22px",borderRadius:12,background:T.white,color:T.bg,fontFamily:T.font,fontWeight:700,fontSize:15,border:"none",cursor:"pointer"}}>
+          <button onClick={onListen} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"15px 22px",borderRadius:12,background:HIGHLIGHT,color:onColorInk(HIGHLIGHT),fontFamily:T.font,fontWeight:700,fontSize:15,border:"none",cursor:"pointer"}}>
             Listen &amp; Watch <Icon d={Icons.arrow} size={18} stroke={2.2}/>
           </button>
           <button onClick={onSubscribe} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"15px 22px",borderRadius:12,background:T.surface,color:T.white,fontFamily:T.font,fontWeight:600,fontSize:15,border:`1px solid ${T.line}`,cursor:"pointer"}}>
