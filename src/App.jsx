@@ -35,9 +35,10 @@ const REMEMBER_KEY = "ssd_remembered_token";
 //
 // Palette:  Lynx White #F7F7F7 · Dream Catcher #E5EBEA · Cassiopeia #AED0C9
 //           Chinese Lantern #F09056 · Deep Slate Olive #172713 · Sensaimidori #374231
-const LANTERN = "#F09056";   // warm accent — play, CTAs, vodcast, highlights, alerts
+const LANTERN = "#F09056";   // warm accent — HIGHLIGHT ONLY (play/watch, latest, active states)
 const CASSIO  = "#AED0C9";   // cool accent — private / success
-const SENSAI  = "#374231";   // deep green — used as an occasional card block
+const SENSAI  = "#374231";   // deep green — occasional secondary accent
+const HIGHLIGHT = LANTERN;   // the single highlight color used across interactive accents
 const T = {
   bg:       "var(--bg)",
   surface:  "var(--surface)",
@@ -73,8 +74,6 @@ const T = {
     cobalt:    CASSIO,
   },
 };
-// Rotating accent colors for episode tag blocks — orange, mint, deep green.
-const TAG_CYCLE = [LANTERN, CASSIO, SENSAI];
 
 // ─── Icons (inline SVG, stroke-based, elegant) ─────────────────────────────────
 const Icon = ({ d, size=18, stroke=2, fill="none", color="currentColor", style={} }) => (
@@ -377,7 +376,7 @@ const Tag = ({ children, color=T.accents.marigold }) => (
 );
 // Soft tinted pill — used where a lighter touch reads better (e.g. status)
 const SoftTag = ({ children, color=T.accents.sage }) => (
-  <span style={{display:"inline-flex",alignItems:"center",gap:5,background:color+"33",color:T.accents.sand,fontSize:11,fontWeight:700,padding:"4px 10px",borderRadius:7,fontFamily:T.font,letterSpacing:.2}}>
+  <span style={{display:"inline-flex",alignItems:"center",gap:5,background:color+"33",color:T.white,fontSize:11,fontWeight:700,padding:"4px 10px",borderRadius:7,fontFamily:T.font,letterSpacing:.2}}>
     <span style={{width:6,height:6,borderRadius:"50%",background:color,display:"inline-block"}}/>
     {children}
   </span>
@@ -505,7 +504,7 @@ const VideoPlayer = ({ src, accent }) => {
 };
 
 // ─── Brand Mark — interlocking SS monogram (real logo, scalable vector) ─────────
-const SSMonogram = ({ size=28, color=T.accents.sand, style={} }) => (
+const SSMonogram = ({ size=28, color=T.white, style={} }) => (
   <svg viewBox="0 0 328 332" width={size} height={size*1.012} fill="none" style={style} aria-label="Sunday Sit Downs">
     <path d="M54.9983 205.609L54.9983 241.002C54.9983 257.571 68.4297 271.002 84.9983 271.002L217.746 271.002C248.003 271.002 265.468 236.661 247.647 212.209L152.386 81.5101C147.115 74.2789 138.706 70.0023 129.758 70.0023L96.4982 70.0023" stroke={color} strokeWidth="20"/>
     <path d="M255.5 135.394L255.5 100C255.5 83.4315 242.069 70.0001 225.5 70.0001L92.7526 70.0001C62.4954 70.0001 45.0302 104.342 62.8519 128.793L158.113 259.492C163.383 266.724 171.792 271 180.74 271L214 271" stroke={color} strokeWidth="20"/>
@@ -514,7 +513,7 @@ const SSMonogram = ({ size=28, color=T.accents.sand, style={} }) => (
 // App-icon lockup: monogram on the brand's dark green-black tile (never paired with the wordmark image)
 const BrandMark = ({ size=40 }) => (
   <div style={{width:size,height:size,borderRadius:size*0.28,background:T.surface2,border:`1px solid ${T.line}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-    <SSMonogram size={size*0.56} color={T.accents.sand}/>
+    <SSMonogram size={size*0.56} color={T.white}/>
   </div>
 );
 
@@ -552,7 +551,7 @@ const LockScreen = ({ onSubmit, onBack, isAdmin, onSimulateMagicLink }) => {
           <ThemeToggle/>
         </div>
         <div style={{marginBottom:36}}>
-          <SSMonogram size={44} color={T.accents.sand}/>
+          <SSMonogram size={44} color={T.white}/>
         </div>
         <h1 style={{fontFamily:T.serif,fontSize:52,fontWeight:600,color:T.white,margin:"0 0 6px",lineHeight:1,letterSpacing:-1}}>
           {isAdmin ? "Admin." : "Welcome."}
@@ -599,7 +598,7 @@ const SubscribePage = ({ onBack }) => {
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:32,fontFamily:T.font}}>
       <div style={{maxWidth:400,width:"100%"}}>
         <div style={{width:48,height:48,borderRadius:"50%",background:T.accents.sage+"33",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:20}}>
-          <Icon d={Icons.check} size={24} color={T.accents.sand} stroke={2.5}/>
+          <Icon d={Icons.check} size={24} color={T.white} stroke={2.5}/>
         </div>
         <h1 style={{fontFamily:T.serif,fontSize:44,fontWeight:600,color:T.white,margin:"0 0 10px",letterSpacing:-.5}}>Request sent.</h1>
         <p style={{color:T.grayDim,fontSize:15,margin:"0 0 28px"}}>The Slapes will review your request and reach out when you're approved.</p>
@@ -642,29 +641,29 @@ const inkOverlay = (ink, a) => ink === INK_DARK ? `rgba(23,39,19,${a})` : `rgba(
 
 // ─── Featured Episode (magazine hero — large, editorial) ───────────────────────
 const FeaturedEpisode = ({ episode, isOpen, onToggle }) => {
-  const accent = T.accents.marigold;
-  const ink = "#172713";
+  const accent = HIGHLIGHT;              // orange — reserved for highlight elements
+  const btnInk = onColorInk(accent);     // dark ink on the orange button
   const isVideo = episode.type === "video";
   return (
-    <div style={{background:accent,borderRadius:22,marginBottom:32,overflow:"hidden"}}>
+    <div style={{background:T.surface,border:`1px solid ${T.line}`,borderRadius:22,marginBottom:32,overflow:"hidden"}}>
       <div style={{padding:"30px 30px 28px"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-          <span style={{display:"inline-flex",alignItems:"center",gap:6,background:ink,color:accent,fontSize:11,fontWeight:800,padding:"4px 11px",borderRadius:7,letterSpacing:.8,textTransform:"uppercase"}}>★ Latest</span>
-          <span style={{display:"inline-flex",alignItems:"center",background:"rgba(23,39,19,.16)",color:ink,fontSize:11,fontWeight:800,padding:"4px 10px",borderRadius:7,letterSpacing:.4,textTransform:"uppercase"}}>{isVideo ? "Vodcast" : "Podcast"}</span>
-          <span style={{fontSize:12,color:ink,opacity:.7,fontWeight:600}}>{prettyDate(episode.date)}</span>
+          <span style={{display:"inline-flex",alignItems:"center",gap:6,background:accent,color:btnInk,fontSize:11,fontWeight:800,padding:"4px 11px",borderRadius:7,letterSpacing:.8,textTransform:"uppercase"}}>★ Latest</span>
+          <span style={{display:"inline-flex",alignItems:"center",background:T.surface2,color:T.grayDim,fontSize:11,fontWeight:800,padding:"4px 10px",borderRadius:7,letterSpacing:.4,textTransform:"uppercase"}}>{isVideo ? "Vodcast" : "Podcast"}</span>
+          <span style={{fontSize:12,color:T.gray,fontWeight:600}}>{prettyDate(episode.date)}</span>
         </div>
-        <h2 style={{margin:"0 0 12px",fontFamily:T.serif,fontSize:44,fontWeight:600,color:ink,letterSpacing:-.5,lineHeight:1.02}}>{episode.title}</h2>
-        {episode.notes && <p style={{margin:"0 0 24px",fontSize:15,color:ink,opacity:.78,lineHeight:1.6,maxWidth:520,fontWeight:500}}>{episode.notes}</p>}
-        <button onClick={onToggle} style={{display:"inline-flex",alignItems:"center",gap:10,padding:"13px 24px",borderRadius:12,background:ink,border:"none",cursor:"pointer",color:accent,fontFamily:T.font,fontWeight:700,fontSize:14}}>
+        <h2 style={{margin:"0 0 12px",fontFamily:T.serif,fontSize:44,fontWeight:600,color:T.white,letterSpacing:-.5,lineHeight:1.02}}>{episode.title}</h2>
+        {episode.notes && <p style={{margin:"0 0 24px",fontSize:15,color:T.grayDim,lineHeight:1.6,maxWidth:520,fontWeight:500}}>{episode.notes}</p>}
+        <button onClick={onToggle} style={{display:"inline-flex",alignItems:"center",gap:10,padding:"13px 24px",borderRadius:12,background:accent,border:"none",cursor:"pointer",color:btnInk,fontFamily:T.font,fontWeight:700,fontSize:14}}>
           {isOpen
             ? <><Icon d={Icons.x} size={16} stroke={2.4}/> Close</>
-            : <><Icon d={isVideo?Icons.video:Icons.play} size={16} fill={isVideo?"none":accent} color={accent} stroke={isVideo?2:0}/> {isVideo?"Watch":"Listen"} now</>
+            : <><Icon d={isVideo?Icons.video:Icons.play} size={16} fill={isVideo?"none":btnInk} color={btnInk} stroke={isVideo?2:0}/> {isVideo?"Watch":"Listen"} now</>
           }
         </button>
       </div>
       {isOpen && (
         <div style={{padding:"0 30px 28px"}}>
-          <div style={{background:T.bg,borderRadius:14,padding:"16px 18px"}}>
+          <div style={{background:T.bg,border:`1px solid ${T.line}`,borderRadius:14,padding:"16px 18px"}}>
             {isVideo ? <VideoPlayer src={episode.url} accent={accent}/> : <AudioPlayer src={episode.url} accent={accent}/>}
           </div>
         </div>
@@ -675,24 +674,24 @@ const FeaturedEpisode = ({ episode, isOpen, onToggle }) => {
 
 // ─── Episode Row (flat, dark, color-tagged) ────────────────────────────────────
 const EpisodeRow = ({ episode, index, isOpen, onToggle }) => {
-  const accent = TAG_CYCLE[index % TAG_CYCLE.length];
+  const accent = HIGHLIGHT;              // orange — highlight only (the play/watch control)
   const isVideo = episode.type === "video";
-  const ink = onColorInk(accent); // adaptive: dark on light cards, cream on dark cards
+  const ctrlInk = onColorInk(accent);    // dark ink on the orange control
   return (
-    <div style={{background:accent,borderRadius:16,marginBottom:0,overflow:"hidden",boxShadow:isOpen?`0 0 0 2px ${T.bg}, 0 0 0 4px ${accent}`:"none",transition:"box-shadow .15s"}}>
+    <div style={{background:T.surface,border:`1px solid ${isOpen?accent:T.line}`,borderRadius:16,marginBottom:0,overflow:"hidden",transition:"border-color .15s"}}>
       <div style={{padding:"18px 20px",display:"flex",alignItems:"center",gap:14,cursor:"pointer"}} onClick={onToggle}>
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
-            <span style={{display:"inline-flex",alignItems:"center",background:inkOverlay(ink,.14),color:ink,fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:6,letterSpacing:.4,textTransform:"uppercase"}}>{isVideo ? "Vodcast" : "Podcast"}</span>
-            <span style={{fontSize:12,color:ink,opacity:.7,fontWeight:600}}>{prettyDate(episode.date)}</span>
+            <span style={{display:"inline-flex",alignItems:"center",background:T.surface2,color:T.grayDim,fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:6,letterSpacing:.4,textTransform:"uppercase"}}>{isVideo ? "Vodcast" : "Podcast"}</span>
+            <span style={{fontSize:12,color:T.gray,fontWeight:600}}>{prettyDate(episode.date)}</span>
           </div>
-          <h2 style={{margin:0,fontFamily:T.serif,fontSize:22,fontWeight:600,color:ink,letterSpacing:-.2,lineHeight:1.2}}>{episode.title}</h2>
-          {episode.notes && <p style={{margin:"5px 0 0",fontSize:13,color:ink,opacity:.72,lineHeight:1.5,fontWeight:500}}>{episode.notes}</p>}
+          <h2 style={{margin:0,fontFamily:T.serif,fontSize:22,fontWeight:600,color:T.white,letterSpacing:-.2,lineHeight:1.2}}>{episode.title}</h2>
+          {episode.notes && <p style={{margin:"5px 0 0",fontSize:13,color:T.grayDim,lineHeight:1.5,fontWeight:500}}>{episode.notes}</p>}
         </div>
-        <div style={{flexShrink:0,width:46,height:46,borderRadius:"50%",background:inkOverlay(ink,.16),display:"flex",alignItems:"center",justifyContent:"center",color:ink}}>
+        <div style={{flexShrink:0,width:46,height:46,borderRadius:"50%",background:accent,display:"flex",alignItems:"center",justifyContent:"center",color:ctrlInk}}>
           {isOpen
             ? <Icon d={Icons.x} size={18} stroke={2.4}/>
-            : <Icon d={isVideo?Icons.video:Icons.play} size={18} fill={isVideo?"none":ink} color={ink} stroke={isVideo?2:0}/>
+            : <Icon d={isVideo?Icons.video:Icons.play} size={18} fill={isVideo?"none":ctrlInk} color={ctrlInk} stroke={isVideo?2:0}/>
           }
         </div>
       </div>
@@ -718,7 +717,7 @@ const ListenerPortal = ({ onGoSubscribe, welcomeName, onBack }) => {
       <div style={{maxWidth:1040,margin:"0 auto",padding:"40px 32px 60px"}}>
         {/* Header — SS icon solo (no box, no text) */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:44}}>
-          <SSMonogram size={38} color={T.accents.sand}/>
+          <SSMonogram size={38} color={T.white}/>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <SoftTag color={T.accents.sage}>Private</SoftTag>
             <ThemeToggle/>
@@ -813,20 +812,19 @@ const EpisodeManager = ({ episodes, setEpisodes, setToast }) => {
       )}
 
       {[...episodes].sort((a,b)=>new Date(b.date)-new Date(a.date)).map((ep,i)=>{
-        const accent=TAG_CYCLE[i%TAG_CYCLE.length];
-        const ink=onColorInk(accent);
+        const isVid = ep.type==="video";
         return (
-          <div key={ep.id} style={{background:accent,borderRadius:14,padding:"16px 18px",marginBottom:12}}>
+          <div key={ep.id} style={{background:T.surface,border:`1px solid ${T.line}`,borderRadius:14,padding:"16px 18px",marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:7}}>
-                  <span style={{display:"inline-flex",alignItems:"center",background:inkOverlay(ink,.14),color:ink,fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:6,letterSpacing:.4,textTransform:"uppercase"}}>{ep.type==="video"?"Vodcast":"Podcast"}</span>
-                  <span style={{fontSize:12,color:ink,opacity:.7,fontWeight:600}}>{prettyDate(ep.date)}</span>
+                  <span style={{display:"inline-flex",alignItems:"center",gap:5,background:T.surface2,color:T.grayDim,fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:6,letterSpacing:.4,textTransform:"uppercase"}}><span style={{width:6,height:6,borderRadius:"50%",background:HIGHLIGHT}}/>{isVid?"Vodcast":"Podcast"}</span>
+                  <span style={{fontSize:12,color:T.gray,fontWeight:600}}>{prettyDate(ep.date)}</span>
                 </div>
-                <div style={{fontFamily:T.serif,fontWeight:600,color:ink,fontSize:20,letterSpacing:-.2,lineHeight:1.2}}>{ep.title}</div>
-                {ep.notes&&<div style={{fontSize:13,color:ink,opacity:.72,marginTop:3,fontWeight:500}}>{ep.notes}</div>}
+                <div style={{fontFamily:T.serif,fontWeight:600,color:T.white,fontSize:20,letterSpacing:-.2,lineHeight:1.2}}>{ep.title}</div>
+                {ep.notes&&<div style={{fontSize:13,color:T.grayDim,marginTop:3,fontWeight:500}}>{ep.notes}</div>}
               </div>
-              <button onClick={()=>remove(ep.id)} title="Remove" style={{background:inkOverlay(ink,.16),border:"none",borderRadius:9,padding:8,cursor:"pointer",color:ink,display:"flex",flexShrink:0}}>
+              <button onClick={()=>remove(ep.id)} title="Remove" style={{background:"none",border:`1px solid ${T.line}`,borderRadius:9,padding:8,cursor:"pointer",color:T.grayDim,display:"flex",flexShrink:0}}>
                 <Icon d={Icons.trash} size={16} stroke={2}/>
               </button>
             </div>
@@ -913,7 +911,7 @@ const SubscriberManager = ({ setToast }) => {
       )}
 
       {subscribers.map((sub,i)=>{
-        const accent=TAG_CYCLE[i%TAG_CYCLE.length];
+        const accent=HIGHLIGHT;
         return (
         <Panel key={sub.id} style={{borderLeft:`4px solid ${accent}`}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
@@ -969,7 +967,7 @@ const SettingsPanel = ({ setToast }) => {
           <Field label="Public Key"  value={creds.publicKey}  onChange={e=>setCreds({...creds,publicKey:e.target.value})}  placeholder="Your public key"/>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <Btn onClick={saveCreds} icon={Icons.check}>Save</Btn>
-            {creds.serviceId&&<span style={{fontSize:13,color:T.accents.sand,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5}}><Icon d={Icons.check} size={14} color={T.accents.sand} stroke={2.5}/>Configured</span>}
+            {creds.serviceId&&<span style={{fontSize:13,color:T.accents.sage,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5}}><Icon d={Icons.check} size={14} color={T.accents.sage} stroke={2.5}/>Configured</span>}
           </div>
         </>}
       </Panel>
@@ -1006,7 +1004,7 @@ const AdminDashboard = ({ onLogout }) => {
       <div style={{borderBottom:`1px solid ${T.line}`}}>
         <div style={{maxWidth:760,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",height:60,padding:"0 24px"}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <SSMonogram size={30} color={T.accents.sand}/>
+            <SSMonogram size={30} color={T.white}/>
             <SoftTag color={T.accents.marigold}>Admin</SoftTag>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -1054,7 +1052,7 @@ const HomePage = ({ onListen, onSubscribe, onAdmin }) => (
           A private podcast for family.
         </p>
         <div style={{display:"flex",flexDirection:"column",gap:12,maxWidth:360}}>
-          <button onClick={onListen} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"15px 22px",borderRadius:12,background:T.accents.sand,color:onColorInk(T.accents.sand),fontFamily:T.font,fontWeight:700,fontSize:15,border:"none",cursor:"pointer"}}>
+          <button onClick={onListen} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"15px 22px",borderRadius:12,background:T.white,color:T.bg,fontFamily:T.font,fontWeight:700,fontSize:15,border:"none",cursor:"pointer"}}>
             Listen &amp; Watch <Icon d={Icons.arrow} size={18} stroke={2.2}/>
           </button>
           <button onClick={onSubscribe} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"15px 22px",borderRadius:12,background:T.surface,color:T.white,fontFamily:T.font,fontWeight:600,fontSize:15,border:`1px solid ${T.line}`,cursor:"pointer"}}>

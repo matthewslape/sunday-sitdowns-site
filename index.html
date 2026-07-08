@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sunday Sit Downs</title>
     <meta name="description" content="A private podcast for family." />
-    <meta name="theme-color" content="#172713" />
+    <meta name="theme-color" content="#17181A" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -21,14 +21,15 @@
          (Chinese Lantern orange, Cassiopeia mint) stay constant and live in
          the app. Dark is the default. */
       :root, :root[data-theme="dark"] {
-        --bg:       #172713;             /* Deep Slate Olive */
-        --surface:  #374231;             /* Sensaimidori Green */
-        --surface2: #414d3b;             /* Sensaimidori, lifted for raised cards */
-        --line:     rgba(174,208,201,.20); /* Cassiopeia hairline */
+        --bg:       #17181A;             /* charcoal black */
+        --surface:  #212325;             /* raised charcoal — cards */
+        --surface2: #2A2D2F;             /* raised charcoal — insets/tiles */
+        --line:     rgba(174,208,201,.14); /* faint Cassiopeia hairline */
         --text:     #F7F7F7;             /* Lynx White */
-        --gray:     #8fa89f;             /* dimmed Cassiopeia — muted text */
-        --grayDim:  #AED0C9;             /* Cassiopeia — secondary text */
-        --logo-filter: none;             /* logo art is already light */
+        --gray:     #8b8f8e;             /* muted neutral text */
+        --grayDim:  #c4c8c6;             /* secondary neutral text */
+        /* recolor the cream logo art to Lynx White for the charcoal background */
+        --logo-filter: brightness(0) saturate(100%) invert(97%);
       }
       :root[data-theme="light"] {
         --bg:       #E5EBEA;             /* Dream Catcher */
