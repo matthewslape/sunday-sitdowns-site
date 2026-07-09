@@ -585,11 +585,17 @@ const ScriptHand = ({ style={} }) => (
 // sized to match the headline width. Real text + vector — scales fluidly
 // and follows the theme color with no image or filter.
 const ScriptTitle = ({ style={} }) => (
-  <div style={{display:"inline-block",color:T.white,userSelect:"none",...style}}>
-    <h1 style={{margin:0,fontFamily:T.font,fontWeight:500,fontSize:"clamp(44px, 9vw, 72px)",letterSpacing:"-0.05em",lineHeight:.92}}>
+  // The wrapper's font-size drives the whole lockup: the headline is 1em and
+  // the script is sized in em, so it scales in lockstep with the text at
+  // every viewport. "Sit Downs" measures ~4.33em wide at -5% tracking, so
+  // 3.25em keeps the script at ~75% of the text block — it can never
+  // overhang the headline (percentage sizing could, because the SVG inflated
+  // the shrink-to-fit container's width on small screens).
+  <div style={{display:"inline-block",color:T.white,userSelect:"none",fontSize:"clamp(44px, 9vw, 72px)",...style}}>
+    <h1 style={{margin:0,fontFamily:T.font,fontWeight:500,fontSize:"1em",letterSpacing:"-0.05em",lineHeight:.92}}>
       Sunday<br/>Sit Downs
     </h1>
-    <ScriptHand style={{width:"77%",marginTop:4}}/>
+    <ScriptHand style={{width:"3.25em",marginTop:"0.06em"}}/>
   </div>
 );
 
