@@ -589,7 +589,7 @@ const ScriptTitle = ({ style={} }) => (
     <h1 style={{margin:0,fontFamily:T.font,fontWeight:500,fontSize:"clamp(44px, 9vw, 72px)",letterSpacing:"-0.05em",lineHeight:.92}}>
       Sunday<br/>Sit Downs
     </h1>
-    <ScriptHand style={{width:"96%",marginTop:4}}/>
+    <ScriptHand style={{width:"77%",marginTop:4}}/>
   </div>
 );
 
