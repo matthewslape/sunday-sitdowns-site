@@ -5,7 +5,7 @@ if (typeof document !== "undefined" && !document.getElementById("ssd-fonts")) {
   const l = document.createElement("link");
   l.id = "ssd-fonts";
   l.rel = "stylesheet";
-  l.href = "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500;600;700;800;900&display=swap";
+  l.href = "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500;600;700;800;900&family=Caveat:wght@400;500&display=swap";
   document.head.appendChild(l);
 }
 
@@ -572,9 +572,19 @@ const Wordmark = ({ width=260, style={} }) => (
        style={{width,height:"auto",display:"block",filter:"var(--logo-filter)",...style}}/>
 );
 // Script lockup — "Sunday Sit Downs / with the Slape's" (stands alone, hero use)
-const ScriptTitle = ({ width=320, style={} }) => (
-  <img src="/brand/wordmark-script.png" alt="Sunday Sit Downs with the Slape&apos;s"
-       style={{width,height:"auto",display:"block",filter:"var(--logo-filter)",...style}}/>
+// Responsive HTML/CSS lockup (2026 type spec): Inter Medium 72px at -5%
+// tracking over two lines, script line in Caveat (open-source stand-in for
+// Figma Hand, chosen from the brand-font comparison). Real text — scales
+// fluidly on phones and follows the theme color with no image or filter.
+const ScriptTitle = ({ style={} }) => (
+  <div style={{color:T.white,userSelect:"none",...style}}>
+    <h1 style={{margin:0,fontFamily:T.font,fontWeight:500,fontSize:"clamp(44px, 9vw, 72px)",letterSpacing:"-0.05em",lineHeight:1.02}}>
+      Sunday<br/>Sit Downs
+    </h1>
+    <div aria-label="with the Slape's" style={{fontFamily:"'Caveat', cursive",fontWeight:500,fontSize:"clamp(24px, 4.2vw, 32px)",lineHeight:1.1,marginTop:10}}>
+      with the Slape&apos;s
+    </div>
+  </div>
 );
 
 // ─── Lock Screen ───────────────────────────────────────────────────────────────
@@ -1161,7 +1171,7 @@ const HomePage = ({ onListen, onSubscribe, onAdmin }) => (
       </div>
 
       <div style={{maxWidth:480}}>
-        <ScriptTitle width={360} style={{margin:"0 0 28px"}}/>
+        <ScriptTitle style={{margin:"0 0 28px"}}/>
         <p style={{fontFamily:T.serif,fontSize:22,color:T.grayDim,margin:"0 0 36px",lineHeight:1.4,fontWeight:400,maxWidth:400}}>
           A private podcast for family.
         </p>
