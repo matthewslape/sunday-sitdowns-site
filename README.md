@@ -7,7 +7,7 @@ A private, password-protected podcast & vodcast site for the family. Dark, warm,
 - **React 18 + Vite** — the whole app lives in `src/App.jsx`
 - **Audio hosting:** direct file URLs (Cloudflare R2 recommended — free tier, zero egress fees). Supports `.mp3` and `.m4a`.
 - **Video hosting:** YouTube Unlisted/Private links, embedded via privacy-friendly `youtube-nocookie.com`
-- **Email notifications:** EmailJS (configured in the app's Admin → Settings)
+- **Notifications:** free Web Push — family members tap "Turn on notifications" on the Listen page (iPhone: add the site to the Home Screen first), and every saved episode pings their devices via `netlify/functions/store.mjs` + `public/sw.js`. No email/SMS provider needed.
 - **Storage:** browser `localStorage` via the shim in `src/storage.js` (see limitation below)
 
 ## Run it locally

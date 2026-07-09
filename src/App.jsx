@@ -99,6 +99,7 @@ const Icons = {
   arrow:   ["M5 12h14","M12 5l7 7-7 7"],
   arrowLeft:["M19 12H5","M12 19l-7-7 7-7"],
   sun:     ["M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z","M12 1v2","M12 21v2","M4.22 4.22l1.42 1.42","M18.36 18.36l1.42 1.42","M1 12h2","M21 12h2","M4.22 19.78l1.42-1.42","M18.36 5.64l1.42-1.42"],
+  bell:    ["M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9","M13.73 21a2 2 0 0 1-3.46 0"],
   moon:    "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z",
   dot:     "M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0",
   lock:    ["M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z","M7 11V7a5 5 0 0 1 10 0v4"],
@@ -181,37 +182,58 @@ const PublishedDate = ({ date, style={} }) => {
   );
 };
 
-// ─── EmailJS ───────────────────────────────────────────────────────────────────
-let emailjsReady = false;
-function loadEmailJS() {
-  if (emailjsReady || document.getElementById("emailjs-sdk")) return Promise.resolve();
-  return new Promise((res) => {
-    const s = document.createElement("script");
-    s.id = "emailjs-sdk";
-    s.src = "https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js";
-    s.onload = () => { emailjsReady = true; res(); };
-    document.head.appendChild(s);
-  });
+// ─── Web Push notifications ─────────────────────────────────────────────────────
+// Free device notifications instead of email/SMS: the browser subscribes via
+// the service worker (public/sw.js) and the backend pushes "new episode"
+// alerts to every subscribed device (netlify/functions/store.mjs `notify`).
+const isIOS = () => typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent);
+const isStandalone = () =>
+  (typeof window !== "undefined" && window.matchMedia?.("(display-mode: standalone)").matches) ||
+  (typeof navigator !== "undefined" && navigator.standalone === true);
+// "supported" | "ios-needs-install" (iOS exposes push only from a
+// Home-Screen app) | "unsupported"
+function pushSupport() {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return "unsupported";
+  if (!("PushManager" in window) || !("Notification" in window)) {
+    return isIOS() && !isStandalone() ? "ios-needs-install" : "unsupported";
+  }
+  return "supported";
 }
-async function sendEpisodeEmails(subscribers, episode, credentials) {
-  await loadEmailJS();
-  const { serviceId, templateId, publicKey } = credentials;
-  window.emailjs.init({ publicKey });
-  const results = await Promise.allSettled(
-    subscribers.filter(s => s.email).map(s =>
-      window.emailjs.send(serviceId, templateId, {
-        to_email: s.email, to_name: s.name,
-        episode_title: episode.title, episode_date: episode.date,
-        episode_notes: episode.notes || "", episode_url: episode.url,
-        episode_type: episode.type === "video" ? "Vodcast (Video)" : "Podcast (Audio)",
-        magic_link: s.token ? buildMagicLink(s.token) : buildMagicLink(""),
-      })
-    )
-  );
-  return {
-    sent:   results.filter(r => r.status === "fulfilled").length,
-    failed: results.filter(r => r.status === "rejected").length,
-  };
+function urlB64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+async function getPushSubscription() {
+  try {
+    const reg = await navigator.serviceWorker.getRegistration("/sw.js");
+    return reg ? await reg.pushManager.getSubscription() : null;
+  } catch { return null; }
+}
+async function enablePush() {
+  try {
+    const reg = await navigator.serviceWorker.register("/sw.js");
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") return { ok: false, reason: "denied" };
+    const res = await api({ action: "vapid_public" });
+    if (!res || !res.publicKey) return { ok: false, reason: "no-server" };
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlB64ToUint8Array(res.publicKey),
+    });
+    const saved = await api({ action: "push_subscribe", subscription: sub.toJSON() });
+    if (!(saved && saved.ok)) { try { await sub.unsubscribe(); } catch {} return { ok: false, reason: "no-server" }; }
+    return { ok: true };
+  } catch { return { ok: false, reason: "error" }; }
+}
+async function disablePush() {
+  const sub = await getPushSubscription();
+  if (!sub) return;
+  await api({ action: "push_unsubscribe", endpoint: sub.endpoint });
+  try { await sub.unsubscribe(); } catch {}
 }
 
 // ─── Storage ───────────────────────────────────────────────────────────────────
@@ -591,7 +613,7 @@ const LockScreen = ({ onSubmit, onBack, isAdmin, onSimulateMagicLink }) => {
         {!isAdmin && onSimulateMagicLink && (
           <div style={{marginTop:32,paddingTop:24,borderTop:`1px solid ${T.line}`}}>
             <p style={{fontSize:12,color:T.gray,margin:"0 0 12px",lineHeight:1.6}}>
-              <span style={{color:T.grayDim,fontWeight:600}}>Preview note:</span> Family members won't normally see this — their email link logs them in automatically. Tap to simulate that.
+              <span style={{color:T.grayDim,fontWeight:600}}>Preview note:</span> Family members won't normally see this — their private link logs them in automatically. Tap to simulate that.
             </p>
             <Btn variant="ghost" icon={Icons.link} onClick={onSimulateMagicLink} style={{width:"100%",justifyContent:"center"}}>Simulate magic-link arrival</Btn>
           </div>
@@ -607,7 +629,7 @@ const SubscribePage = ({ onBack }) => {
   const [sent, setSent] = useState(false);
   const [toast, setToast] = useState(null);
   const submit = async () => {
-    if(!form.name||!form.email){setToast("Please fill in your name and email.");return;}
+    if(!form.name||!form.email){setToast("Please fill in your name and how to reach you.");return;}
     // Shared backend appends the request server-side; fall back to the
     // per-browser store when the API isn't available (local demo mode).
     const res = await api({ action:"request", name:form.name, email:form.email, message:form.message });
@@ -640,7 +662,7 @@ const SubscribePage = ({ onBack }) => {
         <h1 style={{fontFamily:T.serif,fontSize:44,fontWeight:600,color:T.white,margin:"0 0 8px",letterSpacing:-.5}}>Request access.</h1>
         <p style={{color:T.grayDim,fontSize:14,margin:"0 0 32px"}}>Fill in your details and the Slapes will approve your subscription.</p>
         <Field label="Full name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Jane Slape"/>
-        <Field label="Email address" type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} placeholder="jane@example.com"/>
+        <Field label="Phone or email" hint="So the Slapes can send you your private access link." value={form.email} onChange={e=>setForm({...form,email:e.target.value})} placeholder="(555) 123-4567 or jane@example.com"/>
         <Field label="Message (optional)" textarea value={form.message} onChange={e=>setForm({...form,message:e.target.value})} placeholder="Say hello…"/>
         <Btn onClick={submit} icon={Icons.arrow} style={{width:"100%",justifyContent:"center"}}>Send request</Btn>
       </div>
@@ -732,10 +754,67 @@ const EpisodeRow = ({ episode, index, isOpen, onToggle }) => {
   );
 };
 
+// ─── Notifications opt-in (listener portal) ─────────────────────────────────────
+// Lets each family member turn on free device notifications for new episodes.
+// Handles the iOS quirk (push requires the site on the Home Screen first).
+const NotificationsCard = ({ setToast }) => {
+  const [state, setState] = useState("checking"); // checking|off|on|busy|ios-needs-install|unsupported|denied
+  useEffect(() => {
+    (async () => {
+      const support = pushSupport();
+      if (support !== "supported") { setState(support); return; }
+      if (typeof Notification !== "undefined" && Notification.permission === "denied") { setState("denied"); return; }
+      setState((await getPushSubscription()) ? "on" : "off");
+    })();
+  }, []);
+
+  const turnOn = async () => {
+    setState("busy");
+    const res = await enablePush();
+    if (res.ok) { setState("on"); setToast("Notifications on — you'll get a ping when new episodes drop! 🔔"); }
+    else if (res.reason === "denied") { setState("denied"); }
+    else { setState("off"); setToast("Couldn't turn on notifications — try again in a moment."); }
+  };
+  const turnOff = async () => { setState("busy"); await disablePush(); setState("off"); setToast("Notifications off."); };
+
+  if (state === "checking" || state === "unsupported") return null;
+
+  if (state === "on") return (
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:28}}>
+      <SoftTag color={T.accents.sage}><Icon d={Icons.bell} size={11} stroke={2.4}/> Notifications on</SoftTag>
+      <button onClick={turnOff} style={{background:"none",border:"none",color:T.gray,cursor:"pointer",fontSize:12,fontFamily:T.font,padding:0}}>Turn off</button>
+    </div>
+  );
+
+  return (
+    <Panel style={{marginBottom:28,display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+      <div style={{width:40,height:40,borderRadius:"50%",background:HIGHLIGHT+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <Icon d={Icons.bell} size={18} color={HIGHLIGHT} stroke={2}/>
+      </div>
+      <div style={{flex:1,minWidth:220}}>
+        <div style={{fontSize:14,fontWeight:700,color:T.white,marginBottom:2}}>Never miss a Sunday Sit Down</div>
+        <div style={{fontSize:13,color:T.grayDim,lineHeight:1.5}}>
+          {state === "ios-needs-install"
+            ? <>On iPhone: tap <span style={{color:T.white,fontWeight:600}}>Share → Add to Home Screen</span>, then open the app from there and this button will appear.</>
+            : state === "denied"
+            ? <>Notifications are blocked for this site in your browser settings — allow them there, then come back.</>
+            : <>Get a free notification on this device whenever a new episode drops.</>}
+        </div>
+      </div>
+      {state !== "ios-needs-install" && state !== "denied" && (
+        <Btn small onClick={turnOn} disabled={state === "busy"} icon={Icons.bell}>
+          {state === "busy" ? "Turning on…" : "Turn on notifications"}
+        </Btn>
+      )}
+    </Panel>
+  );
+};
+
 // ─── Listener Portal ───────────────────────────────────────────────────────────
 const ListenerPortal = ({ onGoSubscribe, welcomeName, onBack }) => {
   const [episodes, setEpisodes] = useState([]);
   const [openId, setOpenId] = useState(null);
+  const [toast, setToast] = useState(null);
   useEffect(()=>{ store.get("episodes").then(e=>setEpisodes(e||PLACEHOLDER_EPISODES)); },[]);
   const sorted = [...episodes].sort((a,b)=>new Date(b.date)-new Date(a.date));
   return (
@@ -755,9 +834,11 @@ const ListenerPortal = ({ onGoSubscribe, welcomeName, onBack }) => {
         <h1 style={{fontFamily:T.serif,fontSize:56,fontWeight:600,color:T.white,margin:"0 0 6px",letterSpacing:-1,lineHeight:1}}>
           {welcomeName ? `Hello, ${welcomeName.split(" ")[0]}.` : "Hello."}
         </h1>
-        <p style={{fontSize:15,color:T.grayDim,margin:"0 0 44px"}}>
+        <p style={{fontSize:15,color:T.grayDim,margin:"0 0 28px"}}>
           {sorted.length} episode{sorted.length!==1?"s":""} to enjoy, newest first.
         </p>
+
+        <NotificationsCard setToast={setToast}/>
 
         {sorted.length === 0
           ? <Panel style={{textAlign:"center",padding:"40px 24px"}}><p style={{color:T.gray,fontSize:15,margin:0}}>No episodes yet — check back soon.</p></Panel>
@@ -780,6 +861,7 @@ const ListenerPortal = ({ onGoSubscribe, welcomeName, onBack }) => {
             </>
         }
       </div>
+      {toast && <Toast msg={toast} onDone={()=>setToast(null)}/>}
     </div>
   );
 };
@@ -796,13 +878,16 @@ const EpisodeManager = ({ episodes, setEpisodes, setToast }) => {
     const newEp={...form,id:Date.now()};
     const next=[...episodes,newEp];
     await store.set("episodes",next); setEpisodes(next); setForm(blank); setAdding(false);
-    const creds=await store.get("emailjs_creds");
-    if(!creds||!creds.serviceId){setToast("Episode saved! (Add EmailJS in Settings to auto-email.)");return;}
-    const subs=((await store.get("subscribers"))||[]).filter(s=>s.email);
-    if(!subs.length){setToast("Episode saved! No subscribers to email yet.");return;}
-    setSending(true); setToast(`Emailing ${subs.length} subscriber${subs.length!==1?"s":""}…`);
-    try{ const {sent,failed}=await sendEpisodeEmails(subs,newEp,creds); setToast(`Emailed ${sent}${failed>0?` (${failed} failed)`:""} ✓`); }
-    catch{ setToast("Episode saved, but email failed. Check Settings."); }
+    // Ping every device that turned notifications on (server-side Web Push).
+    setSending(true); setToast("Episode saved! Notifying the family…");
+    const res=await api({ action:"notify", episode:{ title:newEp.title, type:newEp.type } });
+    if(res&&typeof res.sent==="number"){
+      setToast(res.total===0
+        ? "Episode saved! (No devices have notifications on yet.)"
+        : `Episode saved! Notified ${res.sent} device${res.sent!==1?"s":""}${res.failed?` (${res.failed} unreachable)`:""} ✓`);
+    } else {
+      setToast("Episode saved! (Couldn't send notifications — backend unreachable.)");
+    }
     setSending(false);
   };
   const remove = async (id) => { const next=episodes.filter(e=>e.id!==id); await store.set("episodes",next); setEpisodes(next); setToast("Episode removed."); };
@@ -833,7 +918,7 @@ const EpisodeManager = ({ episodes, setEpisodes, setToast }) => {
             <div style={{fontSize:12,color:T.accents.vermilion,margin:"-8px 0 14px",fontWeight:600}}>That doesn't look like a YouTube link — double-check the URL.</div>
           }
           <Field label="Show notes" textarea value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="What's this episode about?"/>
-          <Btn onClick={save} disabled={sending} icon={Icons.check}>{sending?"Saving…":"Save & notify subscribers"}</Btn>
+          <Btn onClick={save} disabled={sending} icon={Icons.check}>{sending?"Saving…":"Save & notify the family"}</Btn>
         </Panel>
       )}
 
@@ -888,7 +973,7 @@ const SubscriberManager = ({ setToast }) => {
   const deny=async(req)=>{ const nextReqs=requests.map(r=>r.id===req.id?{...r,status:"denied"}:r); await store.set("subscribe_requests",nextReqs);setRequests(nextReqs);setToast(`${req.name} denied.`); };
   const removeSub=async(id)=>{ const next=subscribers.filter(s=>s.id!==id); await store.set("subscribers",next);setSubscribers(next);setToast("Removed."); };
   const addManual=async()=>{
-    if(!addForm.name||!addForm.email){setToast("Name and email required.");return;}
+    if(!addForm.name||!addForm.email){setToast("Name and contact info required.");return;}
     const next=[...subscribers,{...addForm,id:Date.now(),token:makeToken(),addedAt:new Date().toISOString()}];
     await store.set("subscribers",next);setSubscribers(next);setAddForm({name:"",email:""});setAdding(false);setToast("Added!");
   };
@@ -931,7 +1016,7 @@ const SubscriberManager = ({ setToast }) => {
       {adding&&(
         <Panel>
           <Field label="Name" value={addForm.name} onChange={e=>setAddForm({...addForm,name:e.target.value})}/>
-          <Field label="Email" type="email" value={addForm.email} onChange={e=>setAddForm({...addForm,email:e.target.value})}/>
+          <Field label="Phone or email" value={addForm.email} onChange={e=>setAddForm({...addForm,email:e.target.value})}/>
           <Btn onClick={addManual} icon={Icons.plus}>Add subscriber</Btn>
         </Panel>
       )}
@@ -967,11 +1052,17 @@ const SubscriberManager = ({ setToast }) => {
 const SettingsPanel = ({ setToast }) => {
   const [adminPw,setAdminPw]=useState("");
   const [listenerPw,setListenerPw]=useState("");
-  const [creds,setCreds]=useState({serviceId:"",templateId:"",publicKey:""});
-  const [credsLoaded,setCredsLoaded]=useState(false);
-  useEffect(()=>{ store.get("emailjs_creds").then(c=>{if(c)setCreds(c);setCredsLoaded(true);}); },[]);
+  const [deviceCount,setDeviceCount]=useState(null);
+  const [testing,setTesting]=useState(false);
+  useEffect(()=>{ api({action:"push_status"}).then(r=>{ if(r&&typeof r.count==="number") setDeviceCount(r.count); }); },[]);
   const savePw=async()=>{ if(adminPw)await store.set("admin_pw",adminPw); if(listenerPw)await store.set("listener_pw",listenerPw); setAdminPw("");setListenerPw("");setToast("Passwords updated!"); };
-  const saveCreds=async()=>{ if(!creds.serviceId||!creds.templateId||!creds.publicKey){setToast("Fill in all three fields.");return;} await store.set("emailjs_creds",creds); setToast("Email settings saved!"); };
+  const sendTest=async()=>{
+    setTesting(true);
+    const r=await api({action:"notify",test:true});
+    setTesting(false);
+    if(r&&typeof r.sent==="number") setToast(r.total===0?"No devices subscribed yet — turn notifications on from the Listen page first.":`Test sent to ${r.sent} device${r.sent!==1?"s":""}${r.failed?` (${r.failed} unreachable)`:""} ✓`);
+    else setToast("Couldn't send — shared backend unreachable.");
+  };
 
   return (
     <div>
@@ -979,23 +1070,20 @@ const SettingsPanel = ({ setToast }) => {
 
       <Panel>
         <h3 style={{margin:"0 0 6px",fontSize:15,fontWeight:700,color:T.white,display:"flex",alignItems:"center",gap:8}}>
-          <Icon d={Icons.link} size={16} color={T.accents.turquoise} stroke={2}/> Email (EmailJS — free)
+          <Icon d={Icons.bell} size={16} color={HIGHLIGHT} stroke={2}/> New-episode notifications (free)
         </h3>
         <p style={{fontSize:13,color:T.grayDim,margin:"0 0 16px",lineHeight:1.7}}>
-          <a href="https://emailjs.com" target="_blank" rel="noreferrer" style={{color:T.accents.turquoise}}>Create a free account at emailjs.com</a> → connect Gmail → create a Template → paste IDs below.<br/><br/>
-          Template variables: {["{{to_name}}","{{episode_title}}","{{episode_date}}","{{episode_notes}}","{{episode_url}}","{{episode_type}}","{{magic_link}}"].map(v=>(
-            <code key={v} style={{background:T.surface2,padding:"2px 6px",borderRadius:4,fontSize:11,marginRight:4,color:T.grayDim}}>{v}</code>
-          ))}
+          Notifications are sent straight to family members' devices — no email accounts, no phone numbers, nothing to configure here.
+          Each person turns them on once from the <span style={{color:T.white,fontWeight:600}}>Listen &amp; Watch</span> page ("Turn on notifications").
+          On iPhone they'll first add the site to their Home Screen (Share → Add to Home Screen).
+          When you save a new episode, every subscribed device gets a ping automatically.
         </p>
-        {credsLoaded&&<>
-          <Field label="Service ID"  value={creds.serviceId}  onChange={e=>setCreds({...creds,serviceId:e.target.value})}  placeholder="service_xxxxxxx"/>
-          <Field label="Template ID" value={creds.templateId} onChange={e=>setCreds({...creds,templateId:e.target.value})} placeholder="template_xxxxxxx"/>
-          <Field label="Public Key"  value={creds.publicKey}  onChange={e=>setCreds({...creds,publicKey:e.target.value})}  placeholder="Your public key"/>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <Btn onClick={saveCreds} icon={Icons.check}>Save</Btn>
-            {creds.serviceId&&<span style={{fontSize:13,color:T.accents.sage,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5}}><Icon d={Icons.check} size={14} color={T.accents.sage} stroke={2.5}/>Configured</span>}
-          </div>
-        </>}
+        <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+          <Btn small onClick={sendTest} disabled={testing} icon={Icons.bell}>{testing?"Sending…":"Send test notification"}</Btn>
+          {deviceCount!==null && (
+            <SoftTag color={T.accents.sage}>{deviceCount} device{deviceCount!==1?"s":""} subscribed</SoftTag>
+          )}
+        </div>
       </Panel>
 
       <Panel>
@@ -1103,6 +1191,9 @@ export default function App() {
   const [welcomeName,setWelcomeName]=useState(null);
 
   useEffect(()=>{
+    // Keep the push service worker registered on every visit so devices that
+    // opted in keep receiving new-episode notifications.
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>{});
     (async()=>{
       // Magic-link token from the URL, else the per-device remembered token.
       // Matching happens server-side so the subscriber list never leaves the backend.
