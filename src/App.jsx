@@ -243,24 +243,37 @@ async function disablePush() {
 // `vite` dev without Netlify), falls back to the per-browser localStorage shim
 // in src/storage.js so the app still works as a single-device demo.
 const API_URL = "/api/store";
-let apiDown = false;     // flipped after a failed reach — use localStorage fallback
+// `apiDown` means the backend genuinely doesn't exist (plain static host) —
+// it is ONLY set on a definitive signal (404/405/non-JSON response), never on
+// a network error. Transient failures retry and then fail just that one call;
+// the next call tries the server again. (A previous version latched apiDown on
+// any fetch error, which silently diverted a whole session's reads AND writes
+// to per-device localStorage — the cause of magic links that "existed" on the
+// admin's phone but were never saved to the server, and of token lookups that
+// failed permanently after one hiccup on a family member's first visit.)
+let apiDown = false;
 let adminSecret = "";    // held in memory after a successful admin login
 
-async function api(body) {
+async function api(body, { retries = 1 } = {}) {
   if (apiDown) return null;
-  let r;
-  try {
-    r = await fetch(API_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(adminSecret ? { ...body, adminPw: adminSecret } : body),
-    });
-  } catch { apiDown = true; return null; }
-  // A static host without the function serves the SPA's HTML here.
-  if (r.status === 404 || r.status === 405 || !(r.headers.get("content-type") || "").includes("json")) {
-    apiDown = true; return null;
+  for (let attempt = 0; ; attempt++) {
+    let r;
+    try {
+      r = await fetch(API_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(adminSecret ? { ...body, adminPw: adminSecret } : body),
+      });
+    } catch {
+      if (attempt < retries) { await new Promise((res) => setTimeout(res, 700 * (attempt + 1))); continue; }
+      return null; // transient — do not latch; the next call retries the server
+    }
+    // A static host without the function serves the SPA's HTML here.
+    if (r.status === 404 || r.status === 405 || !(r.headers.get("content-type") || "").includes("json")) {
+      apiDown = true; return null;
+    }
+    try { return await r.json(); } catch { return null; }
   }
-  try { return await r.json(); } catch { return null; }
 }
 
 const localFallback = {
@@ -279,25 +292,34 @@ const store = {
     if (res && "value" in res) return res.value;
     return localFallback.get(key);
   },
+  // Returns where the write landed: "server" (shared, visible to everyone)
+  // or "local" (this device only — backend unreachable). Admin flows surface
+  // a warning on "local" so silent divergence can't happen unnoticed.
   async set(key, val) {
     const res = await api({ action: "set", key, value: val });
     if (res && res.ok) {
       // Changing the admin password invalidates the in-memory credential.
       if (key === "admin_pw" && typeof val === "string" && val) adminSecret = val;
-      return;
+      return "server";
     }
-    return localFallback.set(key, val);
+    await localFallback.set(key, val);
+    return "local";
   },
 };
+// Toast text for a write that could not reach the shared backend.
+const LOCAL_SAVE_WARNING = "⚠️ Saved to this device only — the shared backend was unreachable. Check your connection and redo this so the family can see it.";
 
 // Login check — server-side when the API is up, so passwords never reach the
 // browser; local comparison only in the single-device fallback mode.
 async function verifyPassword(pw) {
-  const res = await api({ action: "verify", password: pw });
+  const res = await api({ action: "verify", password: pw }, { retries: 2 });
   let role = null;
   if (res && "role" in res) {
     role = res.role;
-  } else {
+  } else if (apiDown) {
+    // Single-device demo mode (no backend deployed): compare locally.
+    // A transient failure with a live backend must NOT fall through to this —
+    // it would accept default/stale passwords the server has since changed.
     const [lp, ap] = await Promise.all([localFallback.get("listener_pw"), localFallback.get("admin_pw")]);
     role = pw === (ap || DEFAULT_ADMIN_PW) ? "admin" : pw === (lp || DEFAULT_LISTENER_PW) ? "listener" : null;
   }
@@ -306,10 +328,13 @@ async function verifyPassword(pw) {
 }
 
 // Magic-link token check — returns { name } for a valid subscriber token.
+// Extra retries: this runs at page boot on a family member's first visit,
+// where cold starts and flaky mobile connections are most likely.
 async function matchToken(token) {
   if (!token) return null;
-  const res = await api({ action: "token", token });
+  const res = await api({ action: "token", token }, { retries: 3 });
   if (res && "match" in res) return res.match;
+  if (!apiDown) return null; // backend exists but unreachable — don't consult stale local data
   const subs = (await localFallback.get("subscribers")) || [];
   const m = subs.find((s) => s && s.token === token);
   return m ? { name: m.name } : null;
@@ -899,7 +924,8 @@ const EpisodeManager = ({ episodes, setEpisodes, setToast }) => {
     if(!form.title||!form.url){setToast("Title and URL are required.");return;}
     const newEp={...form,id:Date.now()};
     const next=[...episodes,newEp];
-    await store.set("episodes",next); setEpisodes(next); setForm(blank); setAdding(false);
+    const where=await store.set("episodes",next); setEpisodes(next); setForm(blank); setAdding(false);
+    if(where!=="server"){ setToast(LOCAL_SAVE_WARNING); return; }
     // Ping every device that turned notifications on (server-side Web Push).
     setSending(true); setToast("Episode saved! Notifying the family…");
     const res=await api({ action:"notify", episode:{ title:newEp.title, type:newEp.type } });
@@ -977,30 +1003,38 @@ const SubscriberManager = ({ setToast }) => {
   const [adding,setAdding]=useState(false);
 
   useEffect(()=>{
-    store.get("subscribers").then(async s=>{
-      const list=s||[]; let changed=false;
-      const withTokens=list.map(sub=>{ if(!sub.token){changed=true;return {...sub,token:makeToken()};} return sub; });
-      if(changed) await store.set("subscribers",withTokens);
-      setSubscribers(withTokens);
+    store.get("subscribers").then(s=>{
+      // Backfill tokens for legacy entries in memory only — persisting here
+      // could clobber the server list if this read fell back to stale local
+      // data. Any real mutation below saves the full (backfilled) list.
+      setSubscribers((s||[]).map(sub=>sub.token?sub:{...sub,token:makeToken()}));
     });
     store.get("subscribe_requests").then(r=>setRequests(r||[]));
   },[]);
 
+  // Persist the subscriber list and surface whether it truly reached the
+  // shared backend — a magic link only works if the token is on the server.
+  const saveSubs=async(next)=>{
+    const where=await store.set("subscribers",next);
+    setSubscribers(next);
+    return where==="server";
+  };
   const approve=async(req)=>{
     const newSub={id:req.id,name:req.name,email:req.email,token:makeToken(),addedAt:new Date().toISOString()};
-    const nextSubs=[...subscribers,newSub],nextReqs=requests.map(r=>r.id===req.id?{...r,status:"approved"}:r);
-    await store.set("subscribers",nextSubs);await store.set("subscribe_requests",nextReqs);
-    setSubscribers(nextSubs);setRequests(nextReqs);setToast(`${req.name} approved!`);
+    const nextReqs=requests.map(r=>r.id===req.id?{...r,status:"approved"}:r);
+    const shared=await saveSubs([...subscribers,newSub]);
+    await store.set("subscribe_requests",nextReqs);setRequests(nextReqs);
+    setToast(shared?`${req.name} approved!`:LOCAL_SAVE_WARNING);
   };
   const deny=async(req)=>{ const nextReqs=requests.map(r=>r.id===req.id?{...r,status:"denied"}:r); await store.set("subscribe_requests",nextReqs);setRequests(nextReqs);setToast(`${req.name} denied.`); };
-  const removeSub=async(id)=>{ const next=subscribers.filter(s=>s.id!==id); await store.set("subscribers",next);setSubscribers(next);setToast("Removed."); };
+  const removeSub=async(id)=>{ const shared=await saveSubs(subscribers.filter(s=>s.id!==id)); setToast(shared?"Removed.":LOCAL_SAVE_WARNING); };
   const addManual=async()=>{
     if(!addForm.name||!addForm.email){setToast("Name and contact info required.");return;}
-    const next=[...subscribers,{...addForm,id:Date.now(),token:makeToken(),addedAt:new Date().toISOString()}];
-    await store.set("subscribers",next);setSubscribers(next);setAddForm({name:"",email:""});setAdding(false);setToast("Added!");
+    const shared=await saveSubs([...subscribers,{...addForm,id:Date.now(),token:makeToken(),addedAt:new Date().toISOString()}]);
+    setAddForm({name:"",email:""});setAdding(false);setToast(shared?"Added!":LOCAL_SAVE_WARNING);
   };
   const copyLink=async(sub)=>{ const link=buildMagicLink(sub.token); try{await navigator.clipboard.writeText(link);setToast(`Copied ${sub.name}'s magic link!`);}catch{setToast(link);} };
-  const regenerate=async(id)=>{ const next=subscribers.map(s=>s.id===id?{...s,token:makeToken()}:s); await store.set("subscribers",next);setSubscribers(next);setToast("New link generated — old one no longer works."); };
+  const regenerate=async(id)=>{ const shared=await saveSubs(subscribers.map(s=>s.id===id?{...s,token:makeToken()}:s)); setToast(shared?"New link generated — old one no longer works.":LOCAL_SAVE_WARNING); };
 
   const pending=requests.filter(r=>r.status==="pending");
   return (
