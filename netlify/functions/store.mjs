@@ -15,6 +15,7 @@
 
 import { getStore } from "@netlify/blobs";
 import webpush from "web-push";
+import crypto from "node:crypto";
 
 const DEFAULT_ADMIN_PW = "admin123";
 const DEFAULT_LISTENER_PW = "family2024";
@@ -28,7 +29,7 @@ const ADMIN_READ_KEYS = new Set(["subscribers", "subscribe_requests", "emailjs_c
 // signing keypair; `push_subs` holds device push subscriptions (their
 // endpoints are capability URLs — anyone holding one can send that device
 // notifications, so they stay server-side).
-const SECRET_KEYS = new Set(["admin_pw", "listener_pw", "vapid_keys", "push_subs"]);
+const SECRET_KEYS = new Set(["admin_pw", "listener_pw", "vapid_keys", "push_subs", "admin_token"]);
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -72,7 +73,13 @@ export default async (req) => {
 
   const adminPw = (await read("admin_pw")) || DEFAULT_ADMIN_PW;
   const listenerPw = (await read("listener_pw")) || DEFAULT_LISTENER_PW;
-  const isAdmin = typeof body.adminPw === "string" && body.adminPw === adminPw;
+  // Admin auth: the password, or the device admin token (a revocable
+  // bearer credential minted via the `admin_token` action).
+  const storedAdminToken = await read("admin_token");
+  const isAdmin =
+    (typeof body.adminPw === "string" && body.adminPw === adminPw) ||
+    (typeof body.adminToken === "string" && body.adminToken.length >= 16 &&
+     typeof storedAdminToken === "string" && body.adminToken === storedAdminToken);
 
   // VAPID keypair for Web Push — generated once on first use, then reused.
   // The private key never leaves the server.
@@ -131,6 +138,25 @@ export default async (req) => {
       if (!key) return json({ error: "key required" }, 400);
       await db.set(key, JSON.stringify(body.value ?? null));
       return json({ ok: true });
+    }
+
+    // ── Admin quick link ──────────────────────────────────────────────────
+    // Mint (or rotate) the admin device token. Admin-only; the token is a
+    // full-admin bearer credential, so rotating invalidates all old links.
+    case "admin_token": {
+      if (!isAdmin) return json({ error: "forbidden" }, 403);
+      let t = storedAdminToken;
+      if (typeof t !== "string" || !t || body.rotate) {
+        t = crypto.randomBytes(18).toString("base64url");
+        await db.set("admin_token", JSON.stringify(t));
+      }
+      return json({ token: t });
+    }
+
+    // Validate an admin token at page boot (boolean only — never leaks it).
+    case "admin_login": {
+      const t = String(body.token ?? "");
+      return json({ ok: typeof storedAdminToken === "string" && !!t && t === storedAdminToken });
     }
 
     // ── Web Push notifications ────────────────────────────────────────────

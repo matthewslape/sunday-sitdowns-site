@@ -19,13 +19,20 @@ function getUrlToken() {
   try { return new URLSearchParams(window.location.search).get("key"); }
   catch { return null; }
 }
-function buildMagicLink(token) {
+function getUrlAdminToken() {
+  try { return new URLSearchParams(window.location.search).get("admin"); }
+  catch { return null; }
+}
+function siteOrigin() {
   let origin = "https://your-podcast-site.com";
   try { if (window.location.origin && !window.location.origin.startsWith("blob")) origin = window.location.origin; }
   catch {}
-  return `${origin}/?key=${token}`;
+  return origin;
 }
+function buildMagicLink(token) { return `${siteOrigin()}/?key=${token}`; }
+function buildAdminLink(token) { return `${siteOrigin()}/?admin=${token}`; }
 const REMEMBER_KEY = "ssd_remembered_token";
+const ADMIN_REMEMBER_KEY = "ssd_admin_token";
 
 // ─── Design Tokens (Sunday Sit Downs brand — MP058 palette, light + dark) ──────
 // Structural tokens are CSS variables defined in index.html and flipped by the
@@ -252,7 +259,8 @@ const API_URL = "/api/store";
 // admin's phone but were never saved to the server, and of token lookups that
 // failed permanently after one hiccup on a family member's first visit.)
 let apiDown = false;
-let adminSecret = "";    // held in memory after a successful admin login
+let adminSecret = "";    // held in memory after a successful admin password login
+let adminToken = "";     // device admin token (from an admin quick link)
 
 async function api(body, { retries = 1 } = {}) {
   if (apiDown) return null;
@@ -262,7 +270,10 @@ async function api(body, { retries = 1 } = {}) {
       r = await fetch(API_URL, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(adminSecret ? { ...body, adminPw: adminSecret } : body),
+        body: JSON.stringify({
+          ...body,
+          ...(adminSecret ? { adminPw: adminSecret } : adminToken ? { adminToken } : {}),
+        }),
       });
     } catch {
       if (attempt < retries) { await new Promise((res) => setTimeout(res, 700 * (attempt + 1))); continue; }
@@ -1110,6 +1121,7 @@ const SettingsPanel = ({ setToast }) => {
   const [listenerPw,setListenerPw]=useState("");
   const [deviceCount,setDeviceCount]=useState(null);
   const [testing,setTesting]=useState(false);
+  const [gettingLink,setGettingLink]=useState(false);
   useEffect(()=>{ api({action:"push_status"}).then(r=>{ if(r&&typeof r.count==="number") setDeviceCount(r.count); }); },[]);
   const savePw=async()=>{ if(adminPw)await store.set("admin_pw",adminPw); if(listenerPw)await store.set("listener_pw",listenerPw); setAdminPw("");setListenerPw("");setToast("Passwords updated!"); };
   const sendTest=async()=>{
@@ -1118,6 +1130,19 @@ const SettingsPanel = ({ setToast }) => {
     setTesting(false);
     if(r&&typeof r.sent==="number") setToast(r.total===0?"No devices subscribed yet — turn notifications on from the Listen page first.":`Test sent to ${r.sent} device${r.sent!==1?"s":""}${r.failed?` (${r.failed} unreachable)`:""} ✓`);
     else setToast("Couldn't send — shared backend unreachable.");
+  };
+  // Admin quick link: mint (or rotate) the device admin token server-side and
+  // copy the resulting login link.
+  const adminLink=async(rotate)=>{
+    setGettingLink(true);
+    const r=await api({ action:"admin_token", ...(rotate?{rotate:true}:{}) });
+    setGettingLink(false);
+    if(!(r&&r.token)){ setToast("Couldn't fetch the link — shared backend unreachable."); return; }
+    // Adopt the (possibly new) token on this device too.
+    adminToken=r.token; localSet(ADMIN_REMEMBER_KEY,r.token);
+    const link=buildAdminLink(r.token);
+    try{ await navigator.clipboard.writeText(link); setToast(rotate?"New admin link copied — all old admin links are now dead.":"Admin link copied — save it somewhere private!"); }
+    catch{ setToast(link); }
   };
 
   return (
@@ -1139,6 +1164,22 @@ const SettingsPanel = ({ setToast }) => {
           {deviceCount!==null && (
             <SoftTag color={T.accents.sage}>{deviceCount} device{deviceCount!==1?"s":""} subscribed</SoftTag>
           )}
+        </div>
+      </Panel>
+
+      <Panel>
+        <h3 style={{margin:"0 0 6px",fontSize:15,fontWeight:700,color:T.white,display:"flex",alignItems:"center",gap:8}}>
+          <Icon d={Icons.lock} size={16} color={HIGHLIGHT} stroke={2}/> Admin quick link
+        </h3>
+        <p style={{fontSize:13,color:T.grayDim,margin:"0 0 16px",lineHeight:1.7}}>
+          A private link that opens the Admin dashboard directly — no password. Save it to your own device
+          (bookmark or home screen); opening it once also keeps that device logged in as admin.
+          <span style={{color:T.white,fontWeight:600}}> Treat it like a key</span> — anyone with the link has full admin.
+          If it ever leaks, hit Regenerate and every old admin link dies instantly.
+        </p>
+        <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          <Btn small onClick={()=>adminLink(false)} disabled={gettingLink} icon={Icons.link}>{gettingLink?"Working…":"Copy admin link"}</Btn>
+          <Btn small variant="ghost" onClick={()=>adminLink(true)} disabled={gettingLink} icon={Icons.refresh}>Regenerate</Btn>
         </div>
       </Panel>
 
@@ -1251,8 +1292,24 @@ export default function App() {
     // opted in keep receiving new-episode notifications.
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>{});
     (async()=>{
-      // Magic-link token from the URL, else the per-device remembered token.
-      // Matching happens server-side so the subscriber list never leaves the backend.
+      // Admin quick link (?admin=<token>) or a token remembered on this
+      // device — validated server-side, unlocks the dashboard directly.
+      const urlAdmin=getUrlAdminToken();
+      const candidate=urlAdmin||localGet(ADMIN_REMEMBER_KEY);
+      if(candidate){
+        const r=await api({ action:"admin_login", token:candidate }, { retries:2 });
+        if(r&&r.ok){
+          adminToken=candidate; localSet(ADMIN_REMEMBER_KEY,candidate);
+          setAdminUnlocked(true);
+          if(urlAdmin){ setScreen("admin"); setCheckingLink(false); return; }
+        } else if(r&&r.ok===false&&!urlAdmin){
+          // remembered token was rotated/revoked — forget it
+          try{ localStorage.removeItem(ADMIN_REMEMBER_KEY); }catch{}
+        }
+      }
+      // Listener magic-link token from the URL, else the per-device remembered
+      // token. Matching happens server-side so the subscriber list never
+      // leaves the backend.
       const urlToken=getUrlToken();
       let token=urlToken, matched=urlToken?await matchToken(urlToken):null;
       if(!matched){ const remembered=localGet(REMEMBER_KEY); if(remembered){ matched=await matchToken(remembered); token=remembered; } }
@@ -1286,7 +1343,7 @@ export default function App() {
   if (screen==="admin") {
     if (!adminUnlocked) return <LockScreen isAdmin={true} onBack={()=>setScreen("home")}
       onSubmit={async(pw)=>{ const role=await verifyPassword(pw); if(role==="admin"){setAdminUnlocked(true);return true;} return false; }}/>;
-    return <AdminDashboard onLogout={()=>{adminSecret="";setAdminUnlocked(false);setScreen("home");}}/>;
+    return <AdminDashboard onLogout={()=>{adminSecret="";adminToken="";try{localStorage.removeItem(ADMIN_REMEMBER_KEY);}catch{};setAdminUnlocked(false);setScreen("home");}}/>;
   }
   return null;
 }
