@@ -2,7 +2,6 @@
   "name": "Sunday Sit Downs",
   "short_name": "Sit Downs",
   "description": "A private podcast & vodcast for the family.",
-  "start_url": "/",
   "display": "standalone",
   "background_color": "#17181A",
   "theme_color": "#17181A",

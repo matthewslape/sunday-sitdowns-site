@@ -33,6 +33,9 @@ function buildMagicLink(token) { return `${siteOrigin()}/?key=${token}`; }
 function buildAdminLink(token) { return `${siteOrigin()}/?admin=${token}`; }
 const REMEMBER_KEY = "ssd_remembered_token";
 const ADMIN_REMEMBER_KEY = "ssd_admin_token";
+// Set after a successful family-password login so each device only asks once
+// (important for iOS home-screen apps, whose storage starts empty).
+const LISTENER_OK_KEY = "ssd_listener_ok";
 
 // ─── Design Tokens (Sunday Sit Downs brand — MP058 palette, light + dark) ──────
 // Structural tokens are CSS variables defined in index.html and flipped by the
@@ -1314,6 +1317,8 @@ export default function App() {
       let token=urlToken, matched=urlToken?await matchToken(urlToken):null;
       if(!matched){ const remembered=localGet(REMEMBER_KEY); if(remembered){ matched=await matchToken(remembered); token=remembered; } }
       if(matched){ localSet(REMEMBER_KEY,token); setListenerUnlocked(true); setScreen("listen"); setWelcomeName(matched.name); }
+      // Device previously unlocked with the family password — don't ask again.
+      else if(localGet(LISTENER_OK_KEY)==="1"){ setListenerUnlocked(true); }
       setCheckingLink(false);
     })();
   },[]);
@@ -1329,7 +1334,7 @@ export default function App() {
 
   if (screen==="listen") {
     if (!listenerUnlocked) return <LockScreen isAdmin={false} onBack={()=>setScreen("home")}
-      onSubmit={async(pw)=>{ const role=await verifyPassword(pw); if(role){setListenerUnlocked(true);return true;} return false; }}
+      onSubmit={async(pw)=>{ const role=await verifyPassword(pw); if(role){ localSet(LISTENER_OK_KEY,"1"); setListenerUnlocked(true); return true; } return false; }}
       onSimulateMagicLink={async()=>{
         // Preview-only shortcut; subscriber names aren't public on the shared
         // backend, so this may unlock without a name there.
